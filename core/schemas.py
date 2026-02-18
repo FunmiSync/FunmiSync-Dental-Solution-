@@ -142,7 +142,7 @@ class operatorymap(BaseModel):
 class cliniccreate(BaseModel):
     crm_type: str
     clinic_name : str
-    clinic_number : str 
+    clinic_number : int 
     clinic_timezone : str 
     od_developer_key : str 
     od_customer_key : str 
@@ -153,7 +153,7 @@ class cliniccreate(BaseModel):
 
 class clinicout(BaseModel):
     id: str 
-    name : str 
+    clinic_name : str 
 
     class config:
         orm_mode = True

@@ -10,9 +10,6 @@ router =  APIRouter(
     prefix = "/register",
     tags =["Registration"]
 )
-
-
-
 @router.post( "/" , status_code= status.HTTP_201_CREATED, response_model= userout)
 async def registration (payload: usercreate, db :  Session = Depends(get_db)):
     email = payload.email

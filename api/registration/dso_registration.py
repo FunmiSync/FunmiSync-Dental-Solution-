@@ -28,8 +28,10 @@ async def registerDso(payload : registerdso , request: Request, current_user : U
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail = "This Dso already exist")
     
     dso = Dso(
-        name = name 
+        name = name,
+        user_id = current_user.id
     )
+    
     try:
         db.add(dso)
         db.commit()

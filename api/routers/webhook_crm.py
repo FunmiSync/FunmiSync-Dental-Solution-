@@ -35,7 +35,7 @@ async def webhooks(crm_type: str, clinic_id: str, payload: Webhook_requests , db
     #idempotency to avoid duplicate 
     redis_key = f"webhook processing: {event_id}:{contact_id}"
     if await async_redis.exists(redis_key):
-        raise HTTPException(status.HTTP_409_CONFLICT detail = "Dupliacte Webhook")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail = "Dupliacte Webhook")
     else:
         await async_redis.setex(redis_key, 300, "processing")
 

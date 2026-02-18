@@ -1,9 +1,11 @@
 from fastapi import FastAPI
 from core import database
-from  api.routers import webhook_crm
+from api.routers import webhook_crm
 from core.middleware import RateLimitMiddleware
 from fastapi.middleware.cors import CORSMiddleware
-import logging 
+from auth import login, logout
+from api.registration import user_registration, dso_registration, clinic_registration
+import logging
 
 log = logging.getLogger("uvicorn.error")
 logging.basicConfig(
@@ -23,17 +25,22 @@ app.add_middleware(
 )
 app.add_middleware(RateLimitMiddleware)
 app.include_router(webhook_crm.router)
+app.include_router(login.router)
+app.include_router(logout.router)
+app.include_router(user_registration.router)
+app.include_router(dso_registration.router)
+app.include_router(clinic_registration.router)
 
 
 @app.on_event("startup")
 def verify_db_on_start():
     ok, msg = database.ping_db()
     if ok:
-        log.info(msg)             
+        log.info(msg)
     else:
         log.error(msg)
 
-app.get('/')
+
+@app.get("/")
 async def root():
-     return {"status": "running", "message": "Welcome to OpenDental CRM Sync API"}
-    
+    return {"status": "running", "message": "Welcome to OpenDental CRM Sync API"}
