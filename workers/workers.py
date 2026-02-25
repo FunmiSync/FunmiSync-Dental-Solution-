@@ -28,7 +28,6 @@ async def process_crm_load(clinic_id: str, crm_type: str, payload: dict):
             raise ValueError("clinic id  {clinic} not found ")
 
         timezone = clinic.clinic_timezone
-
         patient_data = patient_model(
             FName=payload.get("first_name", ""),
             LName=payload.get("last_name", ""),
@@ -57,6 +56,8 @@ async def process_crm_load(clinic_id: str, crm_type: str, payload: dict):
         contact_id = payload.get("contact_id", "")
         Note = payload.get("Notes", "")
         pop_up = payload.get("pop_up", "")
+
+
 
         od = openDentalApi(clinic_id)
         pat = PatientService(db, od, clinic_id)

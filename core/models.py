@@ -2,6 +2,7 @@ from sqlalchemy import Column, String, Integer, DateTime, func, ForeignKey, Uniq
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.dialects.postgresql import JSON
+from typing import Optional
 from core.database import Base
 import uuid
 
@@ -24,6 +25,7 @@ class Users(Base, Autoid):
     email = Column(String, nullable = False, unique = True)
     password = Column(String , nullable = False)
     token_version:  Mapped[int] = mapped_column(Integer, nullable= False, default = 1)
+    refresh_jti :Mapped[Optional[str]] = mapped_column(String, nullable = True)
     created_at = Column(DateTime(timezone= True), nullable = False, server_default = func.now())
     clinics = relationship("RegisteredClinics", back_populates= "owner", cascade="all, delete")
     dsos = relationship("Dso", back_populates= "user", cascade= "all, delete")

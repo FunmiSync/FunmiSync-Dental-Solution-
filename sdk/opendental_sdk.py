@@ -86,7 +86,7 @@ class openDentalApi:
         body = await appointment_payload_update(appointment_data)
         return await self._request("PUT", endpoint, json =body )
     
-    async def  create_commslog(self,  comms_logs:create_commslogs):
+    async def  create_commslog(self, comms_logs:create_commslogs):
         endpoint = f"/commlogs"
         body = await create_commlog(comms_logs)
         return await self._request("POST", endpoint, json=body)

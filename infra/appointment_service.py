@@ -7,7 +7,7 @@ from core.schemas import AppointmentRequest, Appointments_create, Appointments_u
 import logging 
 from core.utils import check_time_slot, opendental_get_operatory_status, opendental_pattern_time_build
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class AppointmentService():
@@ -34,7 +34,7 @@ class AppointmentService():
         operatories = await self.get_operatories(req)
 
         if not operatories:
-            log.warning("No Operatories found for this Calendar ")
+            logger.warning("No Operatories found for this Calendar ")
             return None 
     
         start_dt, end_dt , pattern = await self.build_time(req)
@@ -42,10 +42,10 @@ class AppointmentService():
         AptNum = await self.book_into_operatory( req, operatories = operatories , start_dt = start_dt , end_dt = end_dt, pattern = pattern, AptNum  = existing_aptnum)
 
         if not AptNum:
-            log.warning("No timeslot available for this Appointment in any operatory")
+            logger.warning("No timeslot available for this Appointment in any operatory")
             return None 
         
-        log.info(f"Appointment is being booked for {AptNum} in {operatories} for clinic {self.clinic.clinic_name}")
+        logger.info(f"Appointment is being booked for {AptNum} in {operatories} for clinic {self.clinic.clinic_name}")
         if reserve:
             reserve.AptNum = int(AptNum)
             reserve.status = req.status   # type: ignore
@@ -56,13 +56,13 @@ class AppointmentService():
 
         
         if reserve and not reserve.commslog_done and req.commslog:   # type: ignore
-            log.info(f"commslog is being created for Aptnum {AptNum} ")
+            logger.info(f"commslog is being created for Aptnum {AptNum} ")
             await self.handle_commslog(req)
             reserve.commslog_done = True
             self.db.commit()
 
         if  reserve and not reserve.popups_done and req.pop_up:   # type: ignore
-            log.info(f"popups is being created for Aptnum {AptNum} ")
+            logger.info(f"popups is being created for Aptnum {AptNum} ")
             await self.handle_popups(req)
 
         return AptNum
@@ -81,7 +81,7 @@ class AppointmentService():
                 continue
 
             if AptNum: 
-                log.info(f"Updated Appointment for Aptnum {AptNum} in  Op  {op}")
+                logger.info(f"Updated Appointment for Aptnum {AptNum} in  Op  {op}")
                 await self.update_appointment( 
                     pattern = pattern, 
                     req = req ,
@@ -92,7 +92,7 @@ class AppointmentService():
                 
                 return AptNum
             
-            log.info(f"creating  Appointment for Aptnum {AptNum} in  Op  {op}")
+            logger.info(f"creating  Appointment for Aptnum {AptNum} in  Op  {op}")
             created = await self.create_appointment(
                     pattern = pattern,
                     op = op,
