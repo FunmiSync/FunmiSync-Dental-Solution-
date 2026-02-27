@@ -6,9 +6,6 @@ import logging
 
 log = logging.getLogger(__name__)
 
-
-
-
 class PatientService():
     def __init__(self, db, od_client, clinic_id: str ):
         self.od = od_client

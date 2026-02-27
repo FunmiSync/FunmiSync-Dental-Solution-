@@ -18,7 +18,7 @@ router = APIRouter(
 )
 
 
-@router.post("/", status_code=  200,  response_model= loginresponse)
+@router.post("", status_code=  200,  response_model= loginresponse)
 async def login(payload: loginrequest, request: Request, response: Response, db:Session= Depends(get_db)):
     email = payload.email
     password = payload.password

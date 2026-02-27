@@ -10,7 +10,7 @@ router =  APIRouter(
     prefix = "/register",
     tags =["Registration"]
 )
-@router.post( "/" , status_code= status.HTTP_201_CREATED, response_model= userout)
+@router.post( "" , status_code= status.HTTP_201_CREATED, response_model= userout)
 async def registration (payload: usercreate, db :  Session = Depends(get_db)):
     email = payload.email
     existing = db.query(Users).filter(Users.email == email ).first()
@@ -24,7 +24,6 @@ async def registration (payload: usercreate, db :  Session = Depends(get_db)):
         email = payload.email,
         password = hashed_pw
     )
-
     db.add(user)
     db.commit()
     db.refresh(user)

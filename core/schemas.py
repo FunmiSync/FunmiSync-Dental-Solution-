@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, ConfigDict, StringConstraints, Field 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Literal
 from typing import Literal, Annotated, List, Dict
 
 
@@ -27,6 +27,14 @@ class Webhook_requests(BaseModel):
     WirelessPhone:str 
     Email: EmailStr 
     PriProv:str
+
+
+class webhook_response(BaseModel):
+    status: int
+    job_id: str
+    message: str
+    clinic: str
+    crm_type: str
 
 
 
@@ -162,28 +170,6 @@ class clinicout(BaseModel):
         orm_mode = True
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ###########################Appointment###############################
 class AppointmentRequest(BaseModel):
     date_str : str
@@ -200,12 +186,13 @@ class AppointmentRequest(BaseModel):
     pat_Num : int 
     clinic_timezone:  str 
 
+#############MEMBERSHIP API REQUEST  ############
+class add_dso_member_request(BaseModel):
+    user_id: str
+    role: Literal["manager", "staff"]
 
-
-
-
-
-
-
+class add_clinic_member_request(BaseModel):
+    user_id: str
+    role: Literal["manager", "staff"]
 
 

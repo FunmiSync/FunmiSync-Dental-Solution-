@@ -1,10 +1,11 @@
-from sqlalchemy import Column, String, Integer, DateTime, func, ForeignKey, UniqueConstraint, Boolean
+from sqlalchemy import Column, String, Integer, DateTime, func, ForeignKey, UniqueConstraint, Boolean, Enum
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.dialects.postgresql import JSON
 from typing import Optional
 from core.database import Base
 import uuid
+import enum
 
 class Autoid():
     @declared_attr
@@ -120,8 +121,6 @@ class UserClinic(Base, Autoid):
     clinic = relationship("RegisteredClinics", back_populates="user_clinic",  cascade="all, delete")
 
 
-
-
 class Audit_logs(Base, Autoid):
     __tablename__ = "audit_logs"
     clinic_id = Column(String, nullable=False)
@@ -133,4 +132,24 @@ class Audit_logs(Base, Autoid):
     details = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone= True), nullable = False, server_default= func.now())
 
+class ScopeType(str, enum.Enum):
+    DSO = "dso"
+    CLINIC = "clinic"
 
+class RoleType(str, enum.Enum):
+    ADMIN = "admin"
+    MANAGER = "Manager"
+    STAFF = "staff"
+
+
+class RoleAssignment(Base, Autoid):
+    __table__name = "role_assignments"
+
+    user_id = Column(String, ForeignKey("users.id", ondelete= "CASCADE"), nullable= False)
+    scope_type: Mapped[ScopeType] = mapped_column(Enum(ScopeType, name="scope_type_enum"), nullable= False)
+    dso_id = Column(String, ForeignKey("Dsos.id", ondelete= "CASCADE"), nullable= True)
+    clinic_id = Column(String, ForeignKey("registered_clinics.id", ondelete="CASCADE"), nullable = True)
+    role: Mapped[RoleType] = mapped_column(Enum(RoleType, name = "role_type_enum"))
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default= func.now())
+    created_by = Column(String, ForeignKey("users.id", ondelete= "SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone= True), nullable = False, server_default= func.now())

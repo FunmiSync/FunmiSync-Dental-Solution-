@@ -13,7 +13,7 @@ router = APIRouter(
     tags= ["Auth"]
 )
 
-@router.post("/", status_code= 200)
+@router.post("", status_code= 200)
 async def logout(
     response: Response,
     request: Request,
