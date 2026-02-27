@@ -29,7 +29,7 @@ class Users(Base, Autoid):
     created_at = Column(DateTime(timezone= True), nullable = False, server_default = func.now())
     clinics = relationship("RegisteredClinics", back_populates= "owner", cascade="all, delete")
     dsos = relationship("Dso", back_populates= "user", cascade= "all, delete")
-    user_clinic = relationship(" UserClinic", back_populates= "users")
+    user_clinic = relationship("UserClinic", back_populates= "users")
 
 
 class Dso(Base, Autoid):
@@ -41,10 +41,8 @@ class Dso(Base, Autoid):
     user = relationship("Users", back_populates= "dsos")
 
     __table_args__ = (
-        UniqueConstraint("user_id", name = "uq_dso_user_id")
+        UniqueConstraint("user_id", name = "uq_dso_user_id"),
     )
-
-
 
 
 class RegisteredClinics (Base, Autoid):
@@ -116,7 +114,7 @@ class Appointments(Base, Autoid):
 class UserClinic(Base, Autoid):
     __tablename__ = "userclinic"
     role = Column(String, nullable=False)
-    user_id  = Column(String, ForeignKey("users.id"), ondelete="CASCADE", nullable = False)
+    user_id  = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable = False)
     clinic_id = Column(String, ForeignKey("registered_clinics.id", ondelete= "CASCADE"), nullable= False)
     users = relationship("Users", back_populates="user_clinic",  cascade="all, delete")
     clinic = relationship("RegisteredClinics", back_populates="user_clinic",  cascade="all, delete")
@@ -132,7 +130,7 @@ class Audit_logs(Base, Autoid):
     action  = Column(String, nullable=False)
     status = Column(String, nullable =False)
     source = Column(String, nullable=False)
-    metadata = Column(JSON, nullable=True)
+    details = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone= True), nullable = False, server_default= func.now())
 
 
