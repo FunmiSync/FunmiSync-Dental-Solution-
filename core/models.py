@@ -4,6 +4,7 @@ from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.dialects.postgresql import JSON
 from typing import Optional
 from core.database import Base
+from datetime import datetime
 import uuid
 import enum
 
@@ -112,15 +113,6 @@ class Appointments(Base, Autoid):
                      )
 
 
-class UserClinic(Base, Autoid):
-    __tablename__ = "userclinic"
-    role = Column(String, nullable=False)
-    user_id  = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable = False)
-    clinic_id = Column(String, ForeignKey("registered_clinics.id", ondelete= "CASCADE"), nullable= False)
-    users = relationship("Users", back_populates="user_clinic",  cascade="all, delete")
-    clinic = relationship("RegisteredClinics", back_populates="user_clinic",  cascade="all, delete")
-
-
 class Audit_logs(Base, Autoid):
     __tablename__ = "audit_logs"
     clinic_id = Column(String, nullable=False)
@@ -138,18 +130,34 @@ class ScopeType(str, enum.Enum):
 
 class RoleType(str, enum.Enum):
     ADMIN = "admin"
-    MANAGER = "Manager"
+    MANAGER = "manager"
     STAFF = "staff"
 
 
 class RoleAssignment(Base, Autoid):
-    __table__name = "role_assignments"
+    __tablename__ = "role_assignments"
 
     user_id = Column(String, ForeignKey("users.id", ondelete= "CASCADE"), nullable= False)
     scope_type: Mapped[ScopeType] = mapped_column(Enum(ScopeType, name="scope_type_enum"), nullable= False)
+    role: Mapped[RoleType] = mapped_column(Enum(RoleType, name = "role_type_enum"))
     dso_id = Column(String, ForeignKey("Dsos.id", ondelete= "CASCADE"), nullable= True)
     clinic_id = Column(String, ForeignKey("registered_clinics.id", ondelete="CASCADE"), nullable = True)
-    role: Mapped[RoleType] = mapped_column(Enum(RoleType, name = "role_type_enum"))
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default= func.now())
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     created_by = Column(String, ForeignKey("users.id", ondelete= "SET NULL"), nullable=True)
-    created_at = Column(DateTime(timezone= True), nullable = False, server_default= func.now())
+    created_at = Column(DateTime(timezone= True), nullable = False, server_default= func.now()) 
+
+
+class MemberInvite(Base, Autoid):
+    __tablename__ = "member_invites"
+
+    email = Column(String, nullable= False)
+    token_hash = Column(String, nullable= False, unique=True)
+    scope_type: Mapped[ScopeType] = mapped_column(Enum(ScopeType, name="scope_type_enum"), nullable= False)
+    role: Mapped[RoleType] = mapped_column(Enum(RoleType, name = "role_type_enum"))
+    dso_id = Column(String, ForeignKey("Dsos.id", ondelete= "CASCADE"), nullable= True)
+    clinic_id = Column(String, ForeignKey("registered_clinics.id", ondelete="CASCADE"), nullable = True)
+    created_by = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    accepted_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_at : Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())

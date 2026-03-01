@@ -196,3 +196,24 @@ class add_clinic_member_request(BaseModel):
     role: Literal["manager", "staff"]
 
 
+######  Invite Request
+class create_dso_invite_request(BaseModel):
+    email : EmailStr
+    role: Literal["manager", "staff"]
+
+class create_clinic_invite_request(BaseModel):
+    email: EmailStr
+    role: Literal["manager", "staff"]
+
+class accept_invite_request(BaseModel):
+    token: str
+
+class invite_out(BaseModel):
+    message: str
+    invite_token: str
+    expires_at: str
+
+    class config:
+        orm_mode = True
+
+

@@ -12,6 +12,7 @@ class Settings (BaseSettings):
     access_token_expire_minutes : float = Field(..., env = ("access_token_expire_minutes", "ACCESS_TOKEN_EXPIRE_MINUTES")) # type: ignore
     refresh_token_expire_days :   int = Field(..., env = ("refresh_token_expire_days", "REFRESH_TOKEN_EXPIRE_DAYS")) # type: ignore  
     encryption_key : str = Field(..., env = ("encryption_key",  "ENCRYPTION_KEY"))  # type: ignore
+    invite_ttl_hours: int = Field(..., env = ("invite_ttl_hours", "INVITE_TTL_HOURS")) # type: ignore
 
 
 
