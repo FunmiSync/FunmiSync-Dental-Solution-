@@ -49,3 +49,26 @@ def require_clinic_access(db, user_id: str, clinic_id: str ):
     raise HTTPException(status.HTTP_403_FORBIDDEN, detail= "No access to this clinic")
     
 
+
+def require_clinic_manage(db, user_id: str, clinic_id: str):
+    clinic = db.query(RegisteredClinics).filter(RegisteredClinics.id == clinic_id).first()
+    if not clinic:
+        logger.warning("Clinic Not Found", extra={
+            "Clinic": clinic_id
+        })
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Clinic Not Found")
+
+    if clinic.dso_id:
+        dso_role = get_dso_role(db, user_id, clinic.dso_id)
+        if dso_role and dso_role.role in {RoleType.ADMIN, RoleType.MANAGER}:
+            return clinic
+
+    clinic_role = get_clinic_role(db, user_id, clinic_id)
+    if clinic_role and clinic_role.role in {RoleType.ADMIN, RoleType.MANAGER}:
+        return clinic
+
+    logger.warning("No manage permission for clinic", extra={
+        "Clinic": clinic_id,
+        "user": user_id
+    })
+    raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Not allowed for this clinic")

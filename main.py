@@ -5,6 +5,7 @@ from core.middleware import RateLimitMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 from auth import login, logout
 from api.registration import user_registration, dso_registration, clinic_registration
+from api import invites
 import logging
 
 log = logging.getLogger("uvicorn.error")
@@ -30,6 +31,7 @@ app.include_router(logout.router)
 app.include_router(user_registration.router)
 app.include_router(dso_registration.router)
 app.include_router(clinic_registration.router)
+app.include_router(invites.router)
 
 
 @app.on_event("startup")
