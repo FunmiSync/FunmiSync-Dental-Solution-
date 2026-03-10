@@ -31,7 +31,6 @@ class Users(Base, Autoid):
     created_at = Column(DateTime(timezone= True), nullable = False, server_default = func.now())
     clinics = relationship("RegisteredClinics", back_populates= "owner", cascade="all, delete")
     dsos = relationship("Dso", back_populates= "user", cascade= "all, delete")
-    user_clinic = relationship("UserClinic", back_populates= "users")
 
 
 class Dso(Base, Autoid):
@@ -67,7 +66,6 @@ class RegisteredClinics (Base, Autoid):
     owner = relationship("Users", back_populates = "clinics")
     patients = relationship("Patients", back_populates= "clinic", cascade="all, delete")
     appointments = relationship("Appointments", back_populates= "clinic", cascade="all, delete")
-    user_clinic = relationship("UserClinic", back_populates= "clinic", cascade="all, delete" )
 
 
 class Patients(Base, Autoid):

@@ -6,8 +6,6 @@ from typing import Literal, Annotated, List, Dict
 
 Datestr = Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$")]
 
-
-
 class Webhook_requests(BaseModel):
     event_id : str
     contact_id : str 
@@ -186,16 +184,6 @@ class AppointmentRequest(BaseModel):
     pat_Num : int 
     clinic_timezone:  str 
 
-#############MEMBERSHIP API REQUEST  ############
-class add_dso_member_request(BaseModel):
-    user_id: str
-    role: Literal["manager", "staff"]
-
-class add_clinic_member_request(BaseModel):
-    user_id: str
-    role: Literal["manager", "staff"]
-
-
 ######  Invite Request
 class create_dso_invite_request(BaseModel):
     email : EmailStr
@@ -215,5 +203,34 @@ class invite_out(BaseModel):
 
     class config:
         orm_mode = True
+
+#### webhook details 
+class webhook_config_out(BaseModel):
+    webhook_url: str
+    header_name: str
+    header_value: str
+
+#Workspace schemas 
+class workspace_item(BaseModel):
+    scope_type: Literal["dso", "clinic"]
+    role: Literal["admin", "manager", "staff"]
+    access_source: Literal["owner", "dso_assignment", "clinic_assignment"]
+    dso_id: Optional[str] = None
+    dso_name: Optional[str] = None
+    clinic_id: Optional[str] = None
+    clinic_name: Optional[str] = None
+
+
+class workspace_ref(BaseModel):
+    scope_type: Literal["dso", "clinic"]
+    dso_id: Optional[str] = None
+    clinic_id: Optional[str] = None
+
+
+class my_workspaces_out(BaseModel):
+    user_id: str
+    workspace_count: int
+    workspaces: List[workspace_item]
+    default_workspace: Optional[workspace_ref] = None
 
 
