@@ -7,6 +7,8 @@ from auth import login, logout
 from api.registration import user_registration, dso_registration, clinic_registration
 from api import invites
 import logging
+from api import workspace
+
 
 log = logging.getLogger("uvicorn.error")
 logging.basicConfig(
@@ -33,6 +35,8 @@ app.include_router(user_registration.router)
 app.include_router(dso_registration.router)
 app.include_router(clinic_registration.router)
 app.include_router(invites.router)
+app.include_router(workspace.router)
+
 
 
 @app.on_event("startup")
