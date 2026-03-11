@@ -6,7 +6,7 @@ from core.models import Users
 from core.schemas import loginresponse, loginrequest, refreshresponse
 from auth.oauth2 import create_access_token, create_refresh_token ,  verify_password, validate_refresh_token, set_refresh_cookie
 from auth.csrf_helper import verify_csrf, make_csrf_token, set_csrf_token
-from infra.login_helper import handle_failed_login, login_attempts, get_redis_attempts , MAX_LOGIN_ATTEMPTS, get_client_ip
+from infra.login_helper import handle_failed_login, login_attempts, get_redis_attempts , MAX_LOGIN_ATTEMPTS, get_client_ip, clear_attempts_with_key
 import logging
 import uuid
 
@@ -31,7 +31,7 @@ async def login(payload: loginrequest, request: Request, response: Response, db:
     
     user = db.query(Users).filter(Users.email == email).first()
     if  user and  verify_password(password, hashed_password = user.password):
-        await async_redis.delete(key)
+        await clear_attempts_with_key(key)
         new_jti = str(uuid.uuid4())
         user.refresh_jti = new_jti
         db.commit()

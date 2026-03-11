@@ -36,6 +36,12 @@ async def  handle_failed_login(key):
         raise HTTPException( status.HTTP_429_TOO_MANY_REQUESTS, detail= "Too many login attempt please Try again Later")
     raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail = "Invalid Email or Password ")
 
+async def clear_attempts_with_key(key):
+    try:
+        await async_redis.delete(key)
+    except RedisError:
+        logger.exception("Redis unavailable; login rate-limit clear skipped", extra={"key": key})
+
 
 def get_client_ip(request: Request):
     X_forwarded_for = request.headers.get("X_forwarded_for")
