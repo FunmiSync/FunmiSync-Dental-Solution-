@@ -12,7 +12,7 @@ router =  APIRouter(
 )
 @router.post( "" , status_code= status.HTTP_201_CREATED, response_model= userout)
 async def registration (payload: usercreate, db :  Session = Depends(get_db)):
-    email = payload.email
+    email = payload.email.strip().lower()
     existing = db.query(Users).filter(Users.email == email ).first()
     if existing:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail = "User with this email already exist")
@@ -21,7 +21,7 @@ async def registration (payload: usercreate, db :  Session = Depends(get_db)):
 
     user = Users(
         username = payload.username,
-        email = payload.email,
+        email = email,
         password = hashed_pw
     )
     db.add(user)

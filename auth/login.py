@@ -20,7 +20,7 @@ router = APIRouter(
 
 @router.post("", status_code=  200,  response_model= loginresponse)
 async def login(payload: loginrequest, request: Request, response: Response, db:Session= Depends(get_db)):
-    email = payload.email
+    email = payload.email.strip().lower()
     password = payload.password
     ip = get_client_ip(request)
     key = await login_attempts(email, ip)
