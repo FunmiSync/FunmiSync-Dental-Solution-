@@ -9,6 +9,7 @@ from core.schemas import Webhook_requests, webhook_response
 from workers.workers import process_crm_load_job
 from infra.webhook_secret import WEBHOOK_SECRET_HEADER, verify_webhook_secret_header
 import logging
+from uuid import UUID
 
 
 router= APIRouter( 
@@ -18,7 +19,7 @@ router= APIRouter(
 logger = logging.getLogger(__name__)
 
 @router.post("/{crm_type}/{clinic_id}", status_code=202, response_model = webhook_response)
-async def webhooks(crm_type: str, clinic_id: str, request: Request, payload: Webhook_requests , db: Session = Depends(get_db)):
+async def webhooks(crm_type: str, clinic_id: UUID, request: Request, payload: Webhook_requests , db: Session = Depends(get_db)):
      # check if clinic is there 
     logger.info(f"webhook received for clinic  {clinic_id}")
     clinic = db.query(RegisteredClinics).filter_by(id=clinic_id).first()

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from fastapi import Depends, HTTPException, status, Response
 from core.database import get_db
 import logging
+import uuid
 
 
 logger = logging.getLogger(__name__)
@@ -34,7 +35,7 @@ def create_token(*, data: dict, expires_delta : timedelta):
 
 def create_access_token(*, user : Users):
     data = {
-        "id" : user.id,
+        "id" : str(user.id),
         "type" : "access",
         "token_version" : user.token_version
     }
@@ -43,7 +44,7 @@ def create_access_token(*, user : Users):
 
 def create_refresh_token(*, user: Users):
     data = {
-        "id" : user.id,
+        "id" : str(user.id),
         "type" : "refresh",
         "token_version" : user.token_version, 
         "jti" : user.refresh_jti
@@ -57,6 +58,13 @@ def decode_token(token: str ):
         return payload 
     except JWTError as e: 
         raise ValueError("invalid Token") from e 
+
+
+def parse_uuid(value: str) -> uuid.UUID:
+    try:
+        return uuid.UUID(value)
+    except (ValueError, TypeError) as e:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid Token") from e
     
 def  get_current_user(token: str = Depends(oauth2_scheme), db:Session = Depends(get_db)): 
     try:
@@ -76,7 +84,8 @@ def  get_current_user(token: str = Depends(oauth2_scheme), db:Session = Depends(
         logger.warning(f"invalid token type for user:{payload.get('id')} ")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail = "invalid Token")
     
-    user = db.query(Users).filter(Users.id == user_id).first()
+    user_uuid = parse_uuid(user_id)
+    user = db.query(Users).filter(Users.id == user_uuid).first()
     if not user:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail = "Invalid Token")
     
@@ -105,7 +114,8 @@ def validate_refresh_token(refresh_token: str , db: Session):
         logger.warning(f"invalid token type for user:{payload.get('id')} ")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail = "invalid Token")
     
-    user = db.query(Users).filter(Users.id == user_id).first()
+    user_uuid = parse_uuid(user_id)
+    user = db.query(Users).filter(Users.id == user_uuid).first()
 
     if not user:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail = "Invalid Token")

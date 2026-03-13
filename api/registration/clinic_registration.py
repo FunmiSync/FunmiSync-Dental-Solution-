@@ -10,6 +10,7 @@ import logging
 import secrets
 from sqlalchemy.exc import SQLAlchemyError
 from core.schemas import clinicout
+from uuid import UUID
 
 log = logging.getLogger(__name__)
 
@@ -95,7 +96,7 @@ async def standalone_clinic(payload : cliniccreate,  request: Request, db: Sessi
 
 
 @router.post("/dso/{dso_id}", status_code= status.HTTP_201_CREATED, response_model= clinicout)
-async def dso_clinic(dso_id : str , payload:cliniccreate, request: Request, db: Session = Depends(get_db), current_user : Users = Depends(get_current_user)):
+async def dso_clinic(dso_id : UUID , payload:cliniccreate, request: Request, db: Session = Depends(get_db), current_user : Users = Depends(get_current_user)):
 
     raw_webhook_secret = secrets.token_urlsafe(32)
     crm_type = payload.crm_type

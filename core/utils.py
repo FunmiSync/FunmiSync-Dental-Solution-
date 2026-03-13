@@ -1,12 +1,13 @@
 from core.schemas import patient_model, Appointments_create, Appointments_update, create_commslogs,  create_pop_ups, create_contact_ghl, create_appointment_ghl, update_appointment_ghl
 from core.database import SessionLocal
 from dateutil import parser
-from core.models import Appointments
+from core.models import Appointments, RegisteredClinics
 import pytz
 import logging
 import asyncio
 import httpx
 from datetime import datetime, timedelta
+from typing import Any, cast
 
  
 fmt = "%Y-%m-%d %H:%M:%S "
@@ -65,48 +66,64 @@ async def create_pops(pop_up : create_pop_ups):
         "PatNum": pop_up.PatNum,
         "Description" : pop_up.pop_ups    }
 
-async def opendental_pattern_time_build(date_str, start_time, end_time, clinic_timezone):
+async def opendental_pattern_time_build(
+    date_str: str,
+    start_time: str,
+    end_time: str,
+    clinic_timezone: str,
+) -> tuple[datetime, datetime, str]:
     #comibinig date and time 
     start_raw = f"{date_str}:{start_time}"
     end_raw = f"{date_str}:{end_time}"
 
-    start_time = parser.parse(start_raw)
-    end_time = parser.parse(end_raw)
+    start_dt = parser.parse(start_raw)
+    end_dt = parser.parse(end_raw)
 
     #localize 
     tz = pytz.timezone(clinic_timezone)
-    start_time = tz.localize(start_time)
-    end_time = tz.localize(end_time)    
-
-    DateTimeStart = start_time.strftime(fmt)
-    DateTimeEnd = end_time.strftime(fmt)
+    start_dt = tz.localize(start_dt)
+    end_dt = tz.localize(end_dt)
 
     #calculate time difference 
-    diff = int((end_time-start_time).total_seconds() /60 )
+    diff = int((end_dt - start_dt).total_seconds() /60 )
 
     pattern = "X" * diff 
 
-    return DateTimeStart, DateTimeEnd , pattern
+    return start_dt.replace(tzinfo=None), end_dt.replace(tzinfo=None), pattern
 
 
-async def  opendental_get_operatory_status (clinic , status, calendar_id ):
-    mapping = clinic.operatory_calendar_map 
+async def opendental_get_operatory_status(
+    clinic: RegisteredClinics,
+    status: str,
+    calendar_id: str,
+) -> list[int]:
+    raw_mapping = clinic.operatory_calendar_map
+    if not isinstance(raw_mapping, dict):
+        return []
+
+    mapping = cast(dict[str, list[dict[str, Any]]], raw_mapping)
     status_list = mapping.get(status, [])
-    matches = []
+    matches: list[int] = []
 
     for item in status_list:
         if item.get("calendar_id") == calendar_id:
-            matches.append(item.get("operatories"))
+            matches.extend(item.get("operatories", []))
+
+    return matches
 
 
-def get_pattern_from_od(start_time_str:str, pattern:str):
+def get_pattern_from_od(start_time_str: str, pattern: str) -> datetime:
     starttime =datetime.strptime( start_time_str, fmt) 
     duration_minutes = len(pattern) * 5
     endtime = starttime + timedelta(minutes = duration_minutes)
     return endtime    
 
 
-async def check_time_slot(existing_appt, new_start_time , new_end_time ):
+async def check_time_slot(
+    existing_appt: list[dict[str, Any]],
+    new_start_time: datetime,
+    new_end_time: datetime,
+) -> bool:
     for appt in existing_appt:
         starttime = datetime.strptime(appt["AptDateTime"], fmt)
         endtime = get_pattern_from_od(start_time_str= appt["AptDateTime"], pattern = appt["Pattern"])

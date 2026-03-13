@@ -2,22 +2,23 @@ from sdk.opendental_sdk import openDentalApi
 from fastapi import Depends
 from  sqlalchemy.orm  import Session
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from core.models import Appointments
+from core.models import Appointments, RegisteredClinics
 from core.schemas import AppointmentRequest, Appointments_create, Appointments_update, create_commslogs, create_pop_ups
 from datetime import datetime, timezone
 import logging 
-from core.utils import check_time_slot, opendental_get_operatory_status, opendental_pattern_time_build
+from typing import Any
+from core.utils import check_time_slot, fmt, opendental_get_operatory_status, opendental_pattern_time_build
 
 logger = logging.getLogger(__name__)
 
 
 class AppointmentService():
-    def __init__(self, db: Session, clinic , od_client: openDentalApi) : 
+    def __init__(self, db: Session, clinic: RegisteredClinics, od_client: openDentalApi) : 
         self.od = od_client
         self.db = db
         self.clinic = clinic
 
-    def _utcnow(self):
+    def _utcnow(self) -> datetime:
         return datetime.now(timezone.utc)
 
     def _apply_status_transition(self, row: Appointments, new_status: str):
@@ -28,16 +29,23 @@ class AppointmentService():
         row.status = new_status
         row.status_changed_at = self._utcnow()
 
-    async def book (self, req: AppointmentRequest ):
-        reserve =   await self.book_reserve(req)
+    def _format_od_datetime(self, value: datetime) -> str:
+        return value.strftime(fmt)
+
+    async def book(self, req: AppointmentRequest) -> int | None:
+        start_dt, end_dt , pattern = await self.build_time(req)
+        start_text = self._format_od_datetime(start_dt)
+        end_text = self._format_od_datetime(end_dt)
+
+        reserve = await self.book_reserve(req, start_text=start_text, end_text=end_text)
         existing_aptnum = reserve.AptNum if (reserve and reserve.AptNum ) else None 
 
         if reserve and existing_aptnum:
             change = bool(
             reserve.status != req.status
             or reserve.date != req.date_str
-            or reserve.start_time != req.start_str
-            or str(reserve.end_time) != str(req.end_str)
+            or reserve.start_time != start_text
+            or reserve.end_time != end_text
             )
 
             if not change:
@@ -48,8 +56,6 @@ class AppointmentService():
         if not operatories:
             logger.warning("No Operatories found for this Calendar ")
             return None 
-    
-        start_dt, end_dt , pattern = await self.build_time(req)
 
         AptNum = await self.book_into_operatory( req, operatories = operatories , start_dt = start_dt , end_dt = end_dt, pattern = pattern, AptNum  = existing_aptnum)
 
@@ -62,8 +68,8 @@ class AppointmentService():
             reserve.AptNum = int(AptNum)
             self._apply_status_transition(reserve, req.status)
             reserve.date = req.date_str   # type: ignore
-            reserve.start_time = start_dt   # type: ignore
-            reserve.end_time = end_dt    # type: ignore
+            reserve.start_time = start_text   # type: ignore
+            reserve.end_time = end_text    # type: ignore
             self.db.commit()
 
         
@@ -80,7 +86,15 @@ class AppointmentService():
         return AptNum
 
 
-    async def book_into_operatory(self,  req: AppointmentRequest, operatories: list , start_dt, end_dt,  pattern : str  ,  AptNum : int | None   ):
+    async def book_into_operatory(
+        self,
+        req: AppointmentRequest,
+        operatories: list[int],
+        start_dt: datetime,
+        end_dt: datetime,
+        pattern: str,
+        AptNum: int | None,
+    ) -> int | None:
         #Create date pattern for date time start and date time end
         date_start = start_dt.strftime("%Y-%m-%d")
         date_end = end_dt.strftime("%Y-%m-%d")
@@ -112,13 +126,16 @@ class AppointmentService():
                     start_dt = start_dt 
                 )
             
-            AptNum = created["AptNum"]
+            created_aptnum = created.get("AptNum")
+            if created_aptnum is None:
+                return None
+            AptNum = int(created_aptnum)
             return AptNum
         return None 
     
 
 
-    async def book_reserve(self, req:AppointmentRequest):
+    async def book_reserve(self, req: AppointmentRequest, start_text: str, end_text: str) -> Appointments | None:
         if  not req.event_id:
             return None 
 
@@ -132,8 +149,8 @@ class AppointmentService():
         status=req.status,
         previous_status=None,
         status_changed_at=self._utcnow(),
-        start_time=req.start_str,   
-        end_time=req.end_str,
+        start_time=start_text,
+        end_time=end_text,
         date=req.date_str,
         calendar_id=req.calendar_id,
         pat_id=req.pat_id,          
@@ -159,24 +176,35 @@ class AppointmentService():
             self.db.rollback()
             raise
 
-
-
-    async def create_appointment( self , req: AppointmentRequest, pattern, op, start_dt):
+    async def create_appointment(
+        self,
+        req: AppointmentRequest,
+        pattern: str,
+        op: int,
+        start_dt: datetime,
+    ) -> dict[str, Any]:
         appointment = Appointments_create(
             PatNum= req.pat_Num,
             Pattern = pattern,
-            AptDateTime= start_dt, 
-            Op = op,
+            AptDateTime=self._format_od_datetime(start_dt),
+            Op = str(op),
             Note = req.Note,
             AptStatus = req.status
         )
         return await  self.od.create_appointments( appointment_data = appointment)
     
-    async def update_appointment(self, req: AppointmentRequest, pattern, AptNum, op, start_dt): 
+    async def update_appointment(
+        self,
+        req: AppointmentRequest,
+        pattern: str,
+        AptNum: int,
+        op: int,
+        start_dt: datetime,
+    ) -> dict[str, Any]:
         appointment = Appointments_update(
             Pattern= pattern,
-            AptDateTime= start_dt,
-            Op = op,
+            AptDateTime=self._format_od_datetime(start_dt),
+            Op = str(op),
             AptStatus= req.status
         )
 
@@ -206,13 +234,13 @@ class AppointmentService():
         await self.od.create_pops(pops = pops )
 
 
-    async def  get_operatories(self, req: AppointmentRequest):
+    async def get_operatories(self, req: AppointmentRequest) -> list[int]:
         return (
             await opendental_get_operatory_status(self.clinic, req.status, req.calendar_id)
         ) or [] 
     
 
-    async def build_time(self, req: AppointmentRequest):
+    async def build_time(self, req: AppointmentRequest) -> tuple[datetime, datetime, str]:
         return (
             await  opendental_pattern_time_build(req.date_str, req.start_str, req.end_str, req.clinic_timezone)
         )

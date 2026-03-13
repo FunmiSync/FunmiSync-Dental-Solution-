@@ -10,15 +10,16 @@ from sqlalchemy.exc import SQLAlchemyError
 from core.circuti_breaker import circuit_breaker_open_error
 import logging
 import asyncio
+from uuid import UUID
 
 logger = logging.getLogger(__name__)
 
 
-def process_crm_load_job(clinic_id : str, crm_type: str, payload: dict):
+def process_crm_load_job(clinic_id : UUID, crm_type: str, payload: dict):
     return asyncio.run(process_crm_load(clinic_id, crm_type, payload))
 
 
-async def process_crm_load(clinic_id: str, crm_type: str, payload: dict):
+async def process_crm_load(clinic_id: UUID, crm_type: str, payload: dict):
     db = SessionLocal()
     try:
         logger.info("CRM job started", extra={

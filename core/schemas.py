@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr, ConfigDict, StringConstraints, Field
 from datetime import datetime
 from typing import Optional, Literal
 from typing import Literal, Annotated, List, Dict
+from uuid import UUID
 
 
 Datestr = Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$")]
@@ -31,7 +32,7 @@ class webhook_response(BaseModel):
     status: int
     job_id: str
     message: str
-    clinic: str
+    clinic: UUID
     crm_type: str
 
 
@@ -127,7 +128,7 @@ class usercreate(BaseModel):
     username:str 
 
 class userout(BaseModel):
-    id : str 
+    id : UUID 
     email : EmailStr 
     username : str 
 
@@ -138,7 +139,7 @@ class registerdso(BaseModel):
     name : str 
 
 class dsoout(BaseModel):
-    id : str 
+    id : UUID 
     name : str 
     
     class config:
@@ -161,7 +162,7 @@ class cliniccreate(BaseModel):
     operatory_calendar_map : Dict[str, List[operatorymap]] = Field ()  
 
 class clinicout(BaseModel):
-    id: str 
+    id: UUID 
     clinic_name : str 
 
     class config:
@@ -179,7 +180,7 @@ class AppointmentRequest(BaseModel):
     contact_id : str 
     Note : Optional[str] = None 
     pop_up : Optional[str] = None 
-    pat_id : str 
+    pat_id : UUID 
     commslog : Optional[str] = None 
     pat_Num : int 
     clinic_timezone:  str 
@@ -215,20 +216,20 @@ class workspace_item(BaseModel):
     scope_type: Literal["dso", "clinic"]
     role: Literal["admin", "manager", "staff"]
     access_source: Literal["owner", "dso_assignment", "clinic_assignment"]
-    dso_id: Optional[str] = None
+    dso_id: Optional[UUID] = None
     dso_name: Optional[str] = None
-    clinic_id: Optional[str] = None
+    clinic_id: Optional[UUID] = None
     clinic_name: Optional[str] = None
 
 
 class workspace_ref(BaseModel):
     scope_type: Literal["dso", "clinic"]
-    dso_id: Optional[str] = None
-    clinic_id: Optional[str] = None
+    dso_id: Optional[UUID] = None
+    clinic_id: Optional[UUID] = None
 
 
 class my_workspaces_out(BaseModel):
-    user_id: str
+    user_id: UUID
     workspace_count: int
     workspaces: List[workspace_item]
     default_workspace: Optional[workspace_ref] = None

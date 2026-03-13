@@ -1,15 +1,16 @@
 from fastapi import status, HTTPException
 from core.models import RoleAssignment, ScopeType, RoleType, RegisteredClinics
 import logging
+from uuid import UUID
 
 logger = logging.getLogger(__name__)
 
-def get_dso_role(db, user_id: str , dso_id: str):
+def get_dso_role(db, user_id: UUID, dso_id: UUID):
     return(
         db.query(RoleAssignment).filter(RoleAssignment.user_id ==user_id, RoleAssignment.scope_type == ScopeType.DSO, RoleAssignment.dso_id ==dso_id, RoleAssignment.is_active ==True).first()
     )
 
-def get_clinic_role(db, user_id: str, clinic_id: str):
+def get_clinic_role(db, user_id: UUID, clinic_id: UUID):
     return (
         db.query(RoleAssignment).filter(
             RoleAssignment.user_id == user_id,
@@ -19,7 +20,7 @@ def get_clinic_role(db, user_id: str, clinic_id: str):
         ). first()
             )
 
-def require_dso_access(db, user_id: str, dso_id: str):
+def require_dso_access(db, user_id: UUID, dso_id: UUID):
     role = get_dso_role(db, user_id, dso_id)
     if not role:
         logger.warning("No access to this DSO", extra={
@@ -29,7 +30,7 @@ def require_dso_access(db, user_id: str, dso_id: str):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="No access to this DSO")
     return role
 
-def require_dso_manage(db, user_id:str, dso_id: str):
+def require_dso_manage(db, user_id: UUID, dso_id: UUID):
     role = require_dso_access(db, user_id, dso_id)
     if role.role not in {RoleType.ADMIN , RoleType.MANAGER}:
         logger.warning("Unauthorized access", extra= {
@@ -39,7 +40,7 @@ def require_dso_manage(db, user_id:str, dso_id: str):
         raise HTTPException(status.HTTP_403_FORBIDDEN,detail = "Not allowed for this DSO")
     return role
 
-def require_clinic_access(db, user_id: str, clinic_id: str ):
+def require_clinic_access(db, user_id: UUID, clinic_id: UUID):
     clinic = db.query(RegisteredClinics).filter(RegisteredClinics.id == clinic_id).first()
     if not clinic:
         logger.warning("Clinic Not Found", extra= {
@@ -66,7 +67,7 @@ def require_clinic_access(db, user_id: str, clinic_id: str ):
     
 
 
-def require_clinic_manage(db, user_id: str, clinic_id: str):
+def require_clinic_manage(db, user_id: UUID, clinic_id: UUID):
     clinic = db.query(RegisteredClinics).filter(RegisteredClinics.id == clinic_id).first()
     if not clinic:
         logger.warning("Clinic Not Found", extra={

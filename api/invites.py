@@ -11,6 +11,7 @@ from config import settings
 import hashlib
 import secrets
 import logging
+from uuid import UUID
 
 logger = logging.getLogger()
 router = APIRouter(
@@ -28,7 +29,7 @@ def hash_token(raw_token: str) -> str:
 
 
 @router.post("/dso/{dso_id}",status_code= status.HTTP_201_CREATED, response_model= invite_out )
-async def create_dso_invite(dso_id: str, payload: create_dso_invite_request, current_user: Users = Depends(get_current_user), db: Session = Depends(get_db)):
+async def create_dso_invite(dso_id: UUID, payload: create_dso_invite_request, current_user: Users = Depends(get_current_user), db: Session = Depends(get_db)):
     
     actor = require_dso_manage(db = db, user_id = current_user.id, dso_id = dso_id)
 
@@ -85,7 +86,7 @@ async def create_dso_invite(dso_id: str, payload: create_dso_invite_request, cur
 
 @router.post("/clinic/{clinic_id}", status_code = status.HTTP_201_CREATED)
 async def create_clinic_invite(
-    clinic_id: str,
+    clinic_id: UUID,
     payload: create_clinic_invite_request,
     current_user: Users = Depends(get_current_user),
     db: Session = Depends(get_db)

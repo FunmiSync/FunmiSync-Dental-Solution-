@@ -3,11 +3,12 @@ from core.models import Patients
 from core.schemas import patient_model
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 import logging
+from uuid import UUID
 
 log = logging.getLogger(__name__)
 
 class PatientService():
-    def __init__(self, db, od_client, clinic_id: str ):
+    def __init__(self, db, od_client, clinic_id: UUID ):
         self.od = od_client
         self.db = db 
         self.clinic_id = clinic_id
@@ -24,7 +25,7 @@ class PatientService():
             LName = pat.LName,
             Gender = pat.Gender,
             phone = pat.WirelessPhone,         
-            Email = pat.Email, 
+            email = pat.Email,
             clinic_id = self.clinic_id,
             pat_num = None
         )
@@ -73,7 +74,7 @@ class PatientService():
             contact_id = contact_id,
             pat = pat 
         )
-        if row.pat_num:
+        if row.pat_num is not None:
             return(row.id, row.pat_num)
         
         

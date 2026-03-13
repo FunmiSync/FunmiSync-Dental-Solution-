@@ -6,13 +6,14 @@ from core.utils import patient_payload, appointment_payload, appointment_payload
 from core.circuti_breaker import circuit_breaker, circuit_breaker_open_error
 from core.schemas import patient_model, Appointments_create, Appointments_update, create_commslogs, create_pop_ups
 import  json
+from uuid import UUID
 
 
 
 class openDentalApi:
     cb = circuit_breaker(max_failures=5, reset_timeout=30)
 
-    def __init__(self, clinic_id :str) -> None:
+    def __init__(self, clinic_id: UUID) -> None:
         self.db = SessionLocal()
         clinic =self.db.query(RegisteredClinics).filter_by(id=clinic_id).first()
         if not clinic:
@@ -62,16 +63,20 @@ class openDentalApi:
     
                  
     
-    async def search_patients(self, last_name:str, date_of_birth: str):
-        endpoint = f"/patients?Lname={last_name}&BirthDate={date_of_birth}"
+    async def search_patients(self, last_name: str, date_of_birth: str | None):
+        birth_date = date_of_birth or ""
+        endpoint = f"/patients?Lname={last_name}&BirthDate={birth_date}"
         return await self._request("GET", endpoint)
 
-    async def create_patients(self, patient_data: patient_model ):
+    async def create_patient(self, patient_data: patient_model):
         endpoint = f"/patients"
         body =  await patient_payload(patient_data)
         return  await self._request("POST", endpoint, json=body)
+
+    async def create_patients(self, patient_data: patient_model):
+        return await self.create_patient(patient_data)
     
-    async def get_appointments_in_operatory(self, operatory: str , dateStart: str , dateEnd : str ):
+    async def get_appointments_in_operatory(self, operatory: int | str, dateStart: str, dateEnd: str):
         endpoint = f"/appointments?Op={operatory}&dateStart={dateStart}&dateEnd={dateEnd}"
         return await self._request("GET", endpoint)
     
@@ -81,7 +86,7 @@ class openDentalApi:
         return  await self._request("POST", endpoint, json=body)
     
 
-    async def update_appointment (self,  Aptnum:str, appointment_data: Appointments_update):
+    async def update_appointment(self, Aptnum: int | str, appointment_data: Appointments_update):
         endpoint = f"/appointment/Aptnum={Aptnum}"
         body = await appointment_payload_update(appointment_data)
         return await self._request("PUT", endpoint, json =body )
