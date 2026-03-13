@@ -30,7 +30,10 @@ async def standalone_clinic(payload : cliniccreate,  request: Request, db: Sessi
     crm_api_key  = payload.crm_api_key 
     location_id = payload.location_id 
     calendar_id = payload.calendar_id 
-    operatory_calendar_map  = payload.operatory_calendar_map
+    operatory_calendar_map  =  {
+    status: [item.model_dump() for item in items]
+    for status, items in payload.operatory_calendar_map.items()
+}
 
     existing = db.query(RegisteredClinics).filter(RegisteredClinics.owner_id == current_user.id, RegisteredClinics.clinic_name == payload.clinic_name, RegisteredClinics.dso_id.is_(None)). first()
     if existing:
@@ -104,7 +107,10 @@ async def dso_clinic(dso_id : str , payload:cliniccreate, request: Request, db: 
     crm_api_key  = payload.crm_api_key 
     location_id = payload.location_id 
     calendar_id = payload.calendar_id 
-    operatory_calendar_map  = payload.operatory_calendar_map
+    operatory_calendar_map  =  {
+    status: [item.model_dump() for item in items]
+    for status, items in payload.operatory_calendar_map.items()
+}
 
     dso = db.query(Dso).filter(Dso.id == dso_id).first()
     if not dso:

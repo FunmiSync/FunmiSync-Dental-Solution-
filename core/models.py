@@ -88,7 +88,6 @@ class Patients(Base, Autoid):
                      )
 
 
-
 class Appointments(Base, Autoid):
     __tablename__ = "appointments"
     AptNum : Mapped[int] = mapped_column(Integer, nullable = True)
