@@ -22,6 +22,31 @@ class Autoid():
         )
 
 
+
+class ScopeType(str, enum.Enum):
+    DSO = "dso"
+    CLINIC = "clinic"
+
+
+class RoleType(str, enum.Enum):
+    ADMIN = "admin"
+    MANAGER = "manager"
+    STAFF = "staff"
+
+
+class SyncDirection(str, enum.Enum):
+    CRM_TO_OD = "crm_to_od"
+    OD_TO_CRM = "od_to_crm"
+
+
+class SyncStatus(str, enum.Enum):
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    RETRYING = "retrying"
+    PROCESSED = "processed"
+    FAILED = "failed"
+
+
 class Users(Base, Autoid):
     __tablename__ = "users"
     username = Column(String, nullable=False)
@@ -36,9 +61,9 @@ class Users(Base, Autoid):
 
 class Dso(Base, Autoid):
     __tablename__ = "Dsos"
-    name = Column(String, nullable=False)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     clinics = relationship("RegisteredClinics", back_populates="dso", cascade="all, delete")
     user = relationship("Users", back_populates="dsos")
 
@@ -114,6 +139,22 @@ class Appointments(Base, Autoid):
     )
 
 
+class InboundEvent(Base, Autoid):
+    __tablename__ = "inbound_events"
+
+    clinic_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True),ForeignKey("registered_clinics.id", ondelete="CASCADE"), nullable=False)
+    crm_type: Mapped[str] = mapped_column(String, nullable=False)
+    event_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    contact_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    job_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    processing_status: Mapped[str] = mapped_column(String, nullable=False, default="received", server_default="received",)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0",)
+    failure_reason: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(),)
+    processed_at: Mapped[Optional[datetime]] = mapped_column( DateTime(timezone=True), nullable=True,)
+
+
 class Audit_logs(Base, Autoid):
     __tablename__ = "audit_logs"
     clinic_id = Column(UUID(as_uuid=True), nullable=False)
@@ -124,17 +165,6 @@ class Audit_logs(Base, Autoid):
     source = Column(String, nullable=False)
     details = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-
-
-class ScopeType(str, enum.Enum):
-    DSO = "dso"
-    CLINIC = "clinic"
-
-
-class RoleType(str, enum.Enum):
-    ADMIN = "admin"
-    MANAGER = "manager"
-    STAFF = "staff"
 
 
 class RoleAssignment(Base, Autoid):
@@ -164,3 +194,30 @@ class MemberInvite(Base, Autoid):
     accepted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+
+class AppointmentSyncLog(Base, Autoid):
+    __tablename__ = "appointment_sync_logs"
+
+    clinic_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid= True), ForeignKey("registered_clinics.id", ondelete= "CASCADE"), nullable=False)
+    pat_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid= True), ForeignKey("patients.id", ondelete= "CASCADE"), nullable=True)
+    appointment_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid= True), ForeignKey("appointments.id", ondelete= "SET NULL"), nullable=True)
+    inbound_event_id : Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid= True), ForeignKey("inbound_events.id", ondelete= "SET NULL"), nullable=True)
+    direction: Mapped[SyncDirection] = mapped_column(Enum(SyncDirection, name= "sync_direction_enum"), nullable= False)
+    appointment_status: Mapped[str] = mapped_column(String, nullable=False)
+    sync_status: Mapped[SyncStatus] = mapped_column(Enum(SyncStatus, name="sync_status_enum"), nullable=False,default=SyncStatus.QUEUED, server_default=SyncStatus.QUEUED.value)
+    change_key: Mapped[str] = mapped_column(String, nullable=False)
+    event_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    contact_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    apt_num: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    patient_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    reason: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    attempt_count: Mapped[int] = mapped_column(Integer,nullable=False,default=0,server_default="0",)
+    payload: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),nullable=False,server_default=func.now())
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True),nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("change_key", name="uq_appointment_sync_logs_change_key"),
+    )

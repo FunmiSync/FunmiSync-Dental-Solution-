@@ -4,10 +4,11 @@ from core.queue import async_redis
 from rq import Retry
 from core.database import get_db
 from core.queue import appointments_queue
-from core.models import RegisteredClinics
+from core.models import RegisteredClinics, InboundEvent, SyncDirection
 from core.schemas import Webhook_requests, webhook_response
 from workers.workers import process_crm_load_job
 from infra.webhook_secret import WEBHOOK_SECRET_HEADER, verify_webhook_secret_header
+from infra.appointment_sync_log_helper import AppointmentSyncLogService, SyncLogInput
 import logging
 from uuid import UUID
 
@@ -37,7 +38,12 @@ async def webhooks(crm_type: str, clinic_id: UUID, request: Request, payload: We
     #extract payload for redis use 
     payload_dict = payload.model_dump()
     event_id = payload_dict.get("event_id")
-    contact_id = payload_dict.get("contact_id")
+    contact_id = payload_dict.get("contact_id") or ""
+    date_str = payload_dict.get("Date", "")
+    start_str = payload_dict.get("start_time", "")
+    end_str = payload_dict.get("end_time", "")
+    appointment_status = payload_dict.get("status", "")
+    patient_name = f"{payload_dict.get('first_name', '')} {payload_dict.get('last_name', '')}".strip() or None
 
     #idempotency to avoid duplicate 
     redis_key = f"webhook processing: {event_id}:{contact_id}"
@@ -46,19 +52,57 @@ async def webhooks(crm_type: str, clinic_id: UUID, request: Request, payload: We
     else:
         await async_redis.setex(redis_key, 300, "processing")
 
+    event = InboundEvent(
+    clinic_id=clinic.id,
+    crm_type=crm_type,
+    event_id=payload_dict.get("event_id"),
+    contact_id=payload_dict.get("contact_id"),
+    payload=payload_dict,
+    processing_status="received",
+    )
+
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+
+    sync_log_service = AppointmentSyncLogService(db)
+    sync_input = SyncLogInput(
+        clinic_id = clinic_id,
+        inbound_event_id= event.id,
+        pat_id = None,
+        appointment_id = None,
+        contact_id = contact_id,
+        event_id = event_id,
+        apt_num = None,
+        patient_name= patient_name,
+        date_str = date_str,
+        start_str = start_str,
+        end_str= end_str,
+        appointment_status= appointment_status,
+        direction = SyncDirection.CRM_TO_OD,
+        payload = payload_dict
+    )
+
+    sync_log = sync_log_service.get_or_create_sync_log(sync_input)
+
     retry_cfg = Retry(
         max=3, 
         interval=[60, 120, 300] 
     )
     #queue the job 
-    job = appointments_queue.enqueue(process_crm_load_job, clinic_id, crm_type, payload_dict, retry =  retry_cfg)
+    job = appointments_queue.enqueue(process_crm_load_job, clinic_id, crm_type, payload_dict, sync_log.id, retry =  retry_cfg)
+
+    event.job_id = job.id
+    event.processing_status = "queued"
+    db.commit()
 
     return {"status" : status.HTTP_200_OK ,
             "payload": payload,
             "job_id" : job.id,
             "message": "Webhook processed successfully",
             "clinic": clinic_id,
-            "crm_type": crm_type}
+            "crm_type": crm_type
+            }
 
 
 
