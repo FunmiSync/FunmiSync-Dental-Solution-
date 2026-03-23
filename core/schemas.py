@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr, ConfigDict, StringConstraints, Field 
 from datetime import datetime
 from typing import Optional, Literal
-from typing import Literal, Annotated, List, Dict
+from typing import Literal, Annotated, List, Dict,Any
 from uuid import UUID
 
 
@@ -233,5 +233,57 @@ class my_workspaces_out(BaseModel):
     workspace_count: int
     workspaces: List[workspace_item]
     default_workspace: Optional[workspace_ref] = None
+
+
+
+##### For the sync log page 
+
+class sync_log_summary_out(BaseModel):
+    synced_today: int 
+    in_progress: int
+    needs_attention:int
+    failed: int
+
+class sync_log_clinic_option_out(BaseModel):
+    id: UUID
+    name: str
+
+class sync_log_row_out(BaseModel):
+    id: UUID
+    started_at:datetime
+    clinic_id: UUID
+    clinic_name:str
+    patient_name: Optional[str] = None
+    record_label:str
+    what_happened:str
+    direction:Literal["crm_to_od", "od_to_crm"]
+    direction_label:str
+    status:Literal["queued", "processing", "retrying", "processed", "failed"]
+    status_label:str
+    reason:Optional[str] = None
+    event_id: Optional[str] = None
+    apt_num: Optional[int] = None
+    operation: Optional[str] = None
+    attempt_count: int 
+
+
+
+class sync_log_page_out(BaseModel):
+    generated_at: datetime
+    visible_count: int
+    summary: sync_log_summary_out
+    clinics: List[sync_log_clinic_option_out]
+    items: List[sync_log_row_out]
+    next_cursor: Optional[str] = None
+
+
+class sync_log_detail_out(sync_log_row_out):
+    completed_at: Optional[datetime] = None
+    appointment_id: Optional[UUID]
+    inbound_event_id: Optional[UUID]
+    pat_id: Optional[UUID] = None
+    appointment_status: str 
+    payload: Optional[Dict[str, Any]] = None
+
 
 

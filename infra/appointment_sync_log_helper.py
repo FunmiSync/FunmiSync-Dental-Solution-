@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from auth.security import encrypt_json_secret, encrypt_secret, hash_lookup
 from core.models import AppointmentSyncLog, SyncDirection,SyncStatus
+from infra.sync_log_events import publish_sync_log_changed
 import uuid
 
 @dataclass
@@ -36,6 +37,16 @@ class AppointmentSyncLogService:
         )
         return hash_lookup(raw_key)
 
+    def publish_change(self, sync_log: AppointmentSyncLog) -> None:
+        clinic_id = sync_log.clinic_id
+        if clinic_id is None:
+            return
+
+        publish_sync_log_changed(
+            self.db,
+            clinic_id=clinic_id,
+            sync_log_id=sync_log.id,
+        )
     
     def get_or_create_sync_log(self, data: SyncLogInput) -> AppointmentSyncLog:
         change_key = self.build_change_key(data)
@@ -63,6 +74,7 @@ class AppointmentSyncLogService:
             self.db.add(sync_log)
             self.db.commit()
             self.db.refresh(sync_log)
+            self.publish_change(sync_log)
         return sync_log
         
 
@@ -74,12 +86,14 @@ class AppointmentSyncLogService:
 
         self.db.commit()
         self.db.refresh(sync_log)
+        self.publish_change(sync_log)
         return sync_log
     
     def mark_operation(self, sync_log: AppointmentSyncLog, *, operation: str) -> AppointmentSyncLog:
         sync_log.operation = operation
         self.db.commit()
         self.db.refresh(sync_log)
+        self.publish_change(sync_log)
         return sync_log
     
 
@@ -97,6 +111,7 @@ class AppointmentSyncLogService:
 
         self.db.commit()
         self.db.refresh(sync_log)
+        self.publish_change(sync_log)
         return sync_log 
     
     def mark_failure(self, sync_log: AppointmentSyncLog, *, reason: str, should_retry: bool, operation: str | None) -> AppointmentSyncLog:
@@ -111,5 +126,6 @@ class AppointmentSyncLogService:
 
         self.db.commit()
         self.db.refresh(sync_log)
+        self.publish_change(sync_log)
         return sync_log
 

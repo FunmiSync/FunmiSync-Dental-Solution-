@@ -75,7 +75,7 @@ class AppointmentService():
             logger.warning("No Operatories found for this Calendar ")
             return None 
 
-        booking = await self.book_into_operatory( req, operatories = operatories , start_dt = start_dt , end_dt = end_dt, pattern = pattern, AptNum  = existing_aptnum)
+        booking = await self.book_into_operatory( req, operatories = operatories , start_dt = start_dt , end_dt = end_dt, pattern = pattern, AptNum= existing_aptnum)
 
         if not booking:
             logger.warning("No timeslot available for this Appointment in any operatory")
