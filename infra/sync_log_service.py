@@ -3,11 +3,9 @@ import json
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Literal, TypeAlias, cast
 from uuid import UUID
-
 from fastapi import HTTPException, status
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
-
 from auth.security import decode_secret, decode_json_secret
 from core.models import AppointmentSyncLog, RegisteredClinics, SyncStatus
 from core.schemas import (
@@ -16,6 +14,14 @@ from core.schemas import (
     sync_log_row_out,
     sync_log_summary_out,
     sync_log_detail_out
+)
+from infra.sync_log_cache import (
+    cache_get_json,
+    cache_set_json,
+    page_cache_key,
+    page_ttl_seconds,
+    summary_cache_key,
+    summary_ttl_seconds,
 )
 
 
@@ -189,7 +195,7 @@ def serialize_key(log: AppointmentSyncLog, clinic: RegisteredClinics) -> sync_lo
     )
 
 #DSO LEVEL 
-def build_summary(
+def build_dso_summary(
     db: Session,
     dso_id: UUID,
     clinic_id: UUID | None,
@@ -227,6 +233,45 @@ def build_summary(
     )
 
 
+#DSO Summary cache
+def build_summary_cached(
+        db: Session,
+        *,
+        dso_id: UUID,
+        clinic_id:UUID,
+        date_from: date | None,
+        date_to: date | None
+)-> sync_log_summary_out:
+    key = summary_cache_key(
+        scope="dso",
+        scope_id=dso_id,
+        clinic_filter_id=clinic_id,
+        date_from=date_from,
+        date_to=date_to
+    )
+
+    cached = cache_get_json(key)
+    if cached:
+        return sync_log_summary_out(**cached)
+    
+    summary = build_dso_summary(
+        db,
+        dso_id=dso_id,
+        clinic_id=clinic_id,
+        date_from=date_from,
+        date_to=date_to
+    )
+
+    cache_set_json(
+        key,
+        summary.model_dump(mode="json"),
+        summary_ttl_seconds(date_from=date_from, date_to=date_to)
+    )
+    
+    return summary
+
+
+
 # CLINIC LEVEL 
 def build_clinic_level_summary(db: Session, clinic_id: UUID, date_from: date | None, date_to: date | None) -> sync_log_summary_out:
 
@@ -251,6 +296,41 @@ def build_clinic_level_summary(db: Session, clinic_id: UUID, date_from: date | N
         failed=failed,
     )
 
+
+#clinic summary cache 
+def build_clinic_level_summary_cached(
+        db:Session,
+        *,
+        clinic_id: UUID,
+        date_from: date | None,
+        date_to: date | None
+) -> sync_log_summary_out:
+    
+    key= summary_cache_key(
+        scope= "clinic",
+        scope_id= clinic_id,
+        clinic_filter_id=None,
+        date_from=date_from,
+        date_to=date_to
+    ) 
+    cached = cache_get_json(key)
+    if cached:
+        return sync_log_summary_out(**cached)
+    
+    summary = build_clinic_level_summary(
+        db,
+        clinic_id=clinic_id,
+        date_from=date_from,
+        date_to=date_to
+    )
+
+    cache_set_json(
+        key,
+        summary.model_dump(mode="json"),
+        summary_ttl_seconds(date_from=date_from, date_to=date_to)
+    )
+
+    return summary
 
 
 #DSO LEVEL 
@@ -347,6 +427,58 @@ def build_items(
     return items, next_cursor
 
 
+# dso items cached
+def build_dso_items_cached(
+        db: Session,
+        *,
+        dso_id: UUID,
+        clinic_id: UUID | None,
+        status: SyncStatus | None,
+        limit: int,
+        date_from: date | None,
+        date_to: date | None,
+        cursor: str | None
+) -> tuple[list[sync_log_row_out], str | None]:
+    key = page_cache_key(
+        scope= "dso",
+        scope_id= dso_id,
+        clinic_filter_id=clinic_id,
+        status= status.value if status else None,
+        date_from=date_from,
+        date_to=date_to,
+        cursor= cursor,
+        limit=limit
+        )
+    
+    cached= cache_get_json(key)
+    if cached:
+        items= [sync_log_row_out(**item) for item in cached["items"]]
+        return items, cached["next_cursor"]
+    
+    items, next_cursor = build_items(
+        db,
+        dso_id=dso_id,
+        clinic_id=clinic_id,
+        status=status,
+        limit=limit,
+        date_from=date_from,
+        date_to=date_to,
+        cursor=cursor
+    )
+
+    cache_set_json(
+        key,
+        {
+            "items": [item.model_dump(mode="json") for item in items],
+            "next_cursor": next_cursor
+        },
+         page_ttl_seconds(date_from=date_from, date_to=date_to, cursor=cursor),
+    )
+
+    return items, next_cursor
+
+
+
 ##CLINIC LEVEL 
 def build_clinic_items(
         db: Session,
@@ -387,7 +519,57 @@ def build_clinic_items(
         last_log, last_clinic = rows[-1]
         next_cursor = _encode_cursor(last_log.started_at, last_log.id)
     
-    return items, cursor 
+    return items, next_cursor 
+
+
+
+def build_clinic_items_cached(
+        db:Session,
+        *,
+        clinic_id:UUID,
+        status: SyncStatus | None,
+        limit: int,
+        date_from: date | None,
+        date_to: date | None,
+        cursor: str | None
+        )-> tuple[list[sync_log_row_out], str | None]:
+        
+        key = page_cache_key(
+            scope="clinic",
+            scope_id= clinic_id,
+            clinic_filter_id= None,
+            status= status.value if status else None,
+            date_from= date_from,
+            date_to=date_to,
+            cursor=cursor,
+            limit=limit
+    )
+        
+        cached = cache_get_json(key)
+        if cached:
+            items = [sync_log_row_out(**item) for item in cached["items"]]
+            return items, cached["next_cursor"]
+        
+        items,  next_cursor = build_clinic_items(
+            db,
+            clinic_id=clinic_id,
+            status=status,
+            limit=limit,
+            date_from=date_from,
+            date_to=date_to,
+            cursor=cursor
+        )
+
+        cache_set_json(
+            key,
+            {
+                "items": [item.model_dump(mode="json") for item in items],
+                "next_cursor": next_cursor
+            },
+            page_ttl_seconds(date_from=date_from, date_to=date_to, cursor=cursor)
+        )
+        return items, next_cursor
+        
 
     
 ###DSO LEVEL
@@ -416,7 +598,7 @@ def build_page_snapshot(
     return sync_log_page_out(
         generated_at=datetime.now(timezone.utc),
         visible_count=len(items),
-        summary=build_summary(
+        summary=build_dso_summary(
             db,
             dso_id=dso_id,
             clinic_id=clinic_id,
@@ -428,7 +610,48 @@ def build_page_snapshot(
         next_cursor=next_cursor,
     )
 
-#####CLINIC LEVEL 
+
+
+def build_dso_page_snapshot_cached(
+        db:Session,
+        *,
+        dso_id:UUID,
+        clinic_id: UUID| None,
+        status: SyncStatus | None,
+        limit:int,
+        date_from: date | None,
+        date_to: date | None,
+        cursor: str | None
+) -> sync_log_page_out:
+    
+    items, next_cursor = build_dso_items_cached(
+        db,
+        dso_id=dso_id,
+        clinic_id=clinic_id,
+        status=status,
+        limit=limit,
+        date_from=date_from,
+        date_to=date_to,
+        cursor=cursor
+    )
+
+    return sync_log_page_out(
+        generated_at=datetime.now(timezone.utc),
+        visible_count=len(items),
+        summary=build_summary_cached(
+            db,
+            dso_id=dso_id,
+            clinic_id= clinic_id,
+            date_from=date_from,
+            date_to=date_to,
+        ),
+        clinics= build_clinic_options(db, dso_id),
+        items= items,
+        next_cursor= next_cursor
+    )
+
+
+    #####CLINIC LEVEL 
 def build_clinic_page_snapshot(
         db: Session,
         *,
@@ -456,6 +679,44 @@ def build_clinic_page_snapshot(
         next_cursor=next_cursor
 
     )
+
+
+
+def build_clinic_page_snapshot_cached(
+    db: Session,
+    *,
+    clinic_id: UUID,
+    status: SyncStatus | None,
+    limit: int,
+    date_from: date | None,
+    date_to: date | None,
+    cursor: str | None,
+) -> sync_log_page_out:
+    items, next_cursor = build_clinic_items_cached(
+        db,
+        clinic_id=clinic_id,
+        status=status,
+        limit=limit,
+        date_from=date_from,
+        date_to=date_to,
+        cursor=cursor,
+    )
+
+    return sync_log_page_out(
+        generated_at=datetime.now(timezone.utc),
+        visible_count=len(items),
+        summary=build_clinic_level_summary_cached(
+            db,
+            clinic_id=clinic_id,
+            date_from=date_from,
+            date_to=date_to,
+        ),
+        clinics=build_single_clinic_option(db, clinic_id),
+        items=items,
+        next_cursor=next_cursor,
+    )
+
+
 
 ####dso level 
 def build_sync_log_detail(

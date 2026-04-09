@@ -1,13 +1,14 @@
 from sdk.opendental_sdk import openDentalApi
-from fastapi import Depends
 from  sqlalchemy.orm  import Session
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from core.models import Appointments, RegisteredClinics, AppointmentSyncLog
 from core.schemas import AppointmentRequest, Appointments_create, Appointments_update, create_commslogs, create_pop_ups
 from datetime import datetime, timezone
+from infra.operatory_cache import (get_operatory_day_appointments_cached, set_operatory_day_appointments_cached, invalidate_operatory_day_cache)
 from infra.appointment_sync_log_helper import AppointmentSyncLogService
 from dataclasses import dataclass 
 import logging 
+import asyncio
 from typing import Any, Literal
 from core.utils import check_time_slot, fmt, opendental_get_operatory_status, opendental_pattern_time_build
 
@@ -39,6 +40,42 @@ class AppointmentService():
 
     def _format_od_datetime(self, value: datetime) -> str:
         return value.strftime(fmt)
+
+    
+    async def get_operatory_appointments_cached(
+        self, 
+        *,
+        operatory: int,
+        date_start: str,
+        date_end: str 
+        ) -> list[dict[str, Any]]:
+
+        cached= get_operatory_day_appointments_cached(
+            clinic_id=self.clinic.id,
+            operatory=operatory,
+            date_start=date_start,
+            date_end=date_end
+            )
+        
+        if cached is not None:
+            return cached 
+        
+        appointments = await self.od.get_appointments_in_operatory(
+            operatory,
+            date_start,
+            date_end,
+        )
+
+        set_operatory_day_appointments_cached(
+            clinic_id=self.clinic.id,
+            operatory=operatory,
+            date_start=date_start,
+            date_end=date_end,
+            appointments=appointments,
+        )
+        return appointments
+        
+
 
     async def book(self, req: AppointmentRequest, * , sync_log_service: AppointmentSyncLogService | None = None,
         sync_log: AppointmentSyncLog | None = None,) -> AppointmentBookingResult | None:
@@ -117,10 +154,19 @@ class AppointmentService():
         date_start = start_dt.strftime("%Y-%m-%d")
         date_end = end_dt.strftime("%Y-%m-%d")
 
-        for op in operatories: 
-            existing = await self.od.get_appointments_in_operatory(op, date_start, date_end)
-        
-        
+        results = await asyncio.gather(
+            *[
+                self.get_operatory_appointments_cached(
+                    operatory= op,
+                    date_start=date_start,
+                    date_end=date_end
+                )
+                for op in operatories
+            ]
+        )
+
+
+        for op, existing in zip(operatories, results):
             if not await check_time_slot(existing, start_dt, end_dt):
                 continue
 
@@ -133,6 +179,13 @@ class AppointmentService():
                     start_dt = start_dt,
                     AptNum= AptNum
                     )
+                
+                invalidate_operatory_day_cache(
+                    clinic_id=self.clinic.id,
+                    operatory=op,
+                    date_start=date_start,
+                    date_end=date_end,
+                )
                 
                 return AppointmentBookingResult(apt_num = int(AptNum), action = "updated")
             
@@ -147,6 +200,14 @@ class AppointmentService():
             created_aptnum = created.get("AptNum")
             if created_aptnum is None:
                 return None
+            
+            invalidate_operatory_day_cache(
+                clinic_id=self.clinic.id,
+                operatory=op,
+                date_start=date_start,
+                date_end=date_end,
+            )
+
             return AppointmentBookingResult(
                 apt_num=int(created_aptnum),
                 action="created",

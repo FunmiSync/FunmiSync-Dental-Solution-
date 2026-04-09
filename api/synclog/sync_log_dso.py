@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from auth.oauth2 import get_current_user
 from auth.security import decode_json_secret
-from infra.sync_log_service import build_page_snapshot, build_sync_log_detail
+from infra.sync_log_service import build_dso_page_snapshot_cached, build_sync_log_detail
 from core.database import get_db
 from core.models import  SyncStatus, Users
 from core.schemas import (sync_log_page_out, sync_log_detail_out)
@@ -22,7 +22,7 @@ router = APIRouter(prefix="/dsos", tags=["Sync Logs"])
 
 logger= logging.getLogger(__name__)
 
-@router.get("/{dso_id}/syn-logs", response_model= sync_log_page_out)
+@router.get("/{dso_id}/sync-logs", response_model= sync_log_page_out)
 async def get_dso_syn_logs_page(
     dso_id: UUID,
     clinic_id: UUID | None = Query(default=None),
@@ -35,7 +35,7 @@ async def get_dso_syn_logs_page(
     db: Session = Depends(get_db)
 ):
     require_dso_access(db=db, user_id= current_user.id, dso_id= dso_id)
-    return build_page_snapshot(
+    return build_dso_page_snapshot_cached(
         db,
         dso_id=dso_id,
         clinic_id=clinic_id,

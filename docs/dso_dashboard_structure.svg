@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1180" viewBox="0 0 1600 1180" fill="none">
+  <rect width="1600" height="1180" fill="#0B1020"/>
+
+  <text x="72" y="74" fill="#F8FAFC" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="700">
+    DSO Dashboard Structure
+  </text>
+  <text x="72" y="108" fill="#94A3B8" font-family="Arial, Helvetica, sans-serif" font-size="18">
+    Business-first layout for multi-clinic dental operations
+  </text>
+
+  <rect x="56" y="140" width="1488" height="152" rx="22" fill="#111827" stroke="#1F2937"/>
+  <text x="84" y="182" fill="#A3E635" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700">
+    Section 1: Business Snapshot
+  </text>
+
+  <rect x="84" y="206" width="220" height="62" rx="16" fill="#172554"/>
+  <text x="104" y="244" fill="#E2E8F0" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="700">Appointments Today</text>
+
+  <rect x="322" y="206" width="220" height="62" rx="16" fill="#052E2B"/>
+  <text x="342" y="244" fill="#E2E8F0" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="700">Confirmation Rate</text>
+
+  <rect x="560" y="206" width="220" height="62" rx="16" fill="#1E293B"/>
+  <text x="580" y="244" fill="#E2E8F0" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="700">Unconfirmed Next 24h</text>
+
+  <rect x="798" y="206" width="220" height="62" rx="16" fill="#3F2A12"/>
+  <text x="818" y="244" fill="#E2E8F0" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="700">Cancel / Reschedule</text>
+
+  <rect x="1036" y="206" width="220" height="62" rx="16" fill="#2C1A4D"/>
+  <text x="1056" y="244" fill="#E2E8F0" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="700">Open Chair Time</text>
+
+  <rect x="1274" y="206" width="220" height="62" rx="16" fill="#3F1D2E"/>
+  <text x="1294" y="244" fill="#E2E8F0" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="700">Clinics Needing Attention</text>
+
+  <rect x="56" y="322" width="944" height="302" rx="22" fill="#111827" stroke="#1F2937"/>
+  <text x="84" y="364" fill="#A3E635" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700">
+    Section 2: Operations Insight
+  </text>
+  <rect x="84" y="392" width="428" height="200" rx="18" fill="#0F172A" stroke="#243042"/>
+  <text x="108" y="430" fill="#E2E8F0" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">Confirmation Funnel</text>
+  <text x="108" y="465" fill="#94A3B8" font-family="Arial, Helvetica, sans-serif" font-size="18">Scheduled</text>
+  <rect x="108" y="480" width="336" height="18" rx="9" fill="#1E293B"/>
+  <rect x="108" y="480" width="310" height="18" rx="9" fill="#3B82F6"/>
+  <text x="108" y="530" fill="#94A3B8" font-family="Arial, Helvetica, sans-serif" font-size="18">Confirmed</text>
+  <rect x="108" y="545" width="336" height="18" rx="9" fill="#1E293B"/>
+  <rect x="108" y="545" width="250" height="18" rx="9" fill="#10B981"/>
+  <text x="108" y="595" fill="#94A3B8" font-family="Arial, Helvetica, sans-serif" font-size="18">Pending / Risk / Cancel</text>
+
+  <rect x="536" y="392" width="436" height="200" rx="18" fill="#0F172A" stroke="#243042"/>
+  <text x="560" y="430" fill="#E2E8F0" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">Clinic Comparison Chart</text>
+  <line x1="572" y1="560" x2="940" y2="560" stroke="#334155" stroke-width="2"/>
+  <rect x="600" y="490" width="44" height="70" rx="8" fill="#3B82F6"/>
+  <rect x="676" y="455" width="44" height="105" rx="8" fill="#10B981"/>
+  <rect x="752" y="510" width="44" height="50" rx="8" fill="#F59E0B"/>
+  <rect x="828" y="470" width="44" height="90" rx="8" fill="#EF4444"/>
+  <text x="592" y="586" fill="#94A3B8" font-family="Arial, Helvetica, sans-serif" font-size="16">Clinic A</text>
+  <text x="668" y="586" fill="#94A3B8" font-family="Arial, Helvetica, sans-serif" font-size="16">Clinic B</text>
+  <text x="744" y="586" fill="#94A3B8" font-family="Arial, Helvetica, sans-serif" font-size="16">Clinic C</text>
+  <text x="820" y="586" fill="#94A3B8" font-family="Arial, Helvetica, sans-serif" font-size="16">Clinic D</text>
+
+  <rect x="1024" y="322" width="520" height="302" rx="22" fill="#111827" stroke="#1F2937"/>
+  <text x="1052" y="364" fill="#A3E635" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700">
+    Section 3: Action Needed
+  </text>
+  <rect x="1052" y="392" width="464" height="88" rx="16" fill="#0F172A" stroke="#243042"/>
+  <text x="1078" y="428" fill="#E2E8F0" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="700">Clinics Requiring Follow-Up</text>
+  <text x="1078" y="460" fill="#94A3B8" font-family="Arial, Helvetica, sans-serif" font-size="18">
+    Low confirmation rate, high cancellations, unresolved requests
+  </text>
+  <rect x="1052" y="496" width="464" height="96" rx="16" fill="#0F172A" stroke="#243042"/>
+  <text x="1078" y="532" fill="#E2E8F0" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="700">Upcoming Risk Queue</text>
+  <text x="1078" y="564" fill="#94A3B8" font-family="Arial, Helvetica, sans-serif" font-size="18">
+    Unconfirmed close-to-start appointments and patients needing manual outreach
+  </text>
+
+  <rect x="56" y="656" width="480" height="220" rx="22" fill="#111827" stroke="#1F2937"/>
+  <text x="84" y="698" fill="#A3E635" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700">
+    Section 4: System Health
+  </text>
+  <rect x="84" y="724" width="132" height="120" rx="16" fill="#291C34"/>
+  <text x="100" y="762" fill="#E2E8F0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">Sync Failures</text>
+  <text x="100" y="810" fill="#FCA5A5" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700">8</text>
+
+  <rect x="230" y="724" width="132" height="120" rx="16" fill="#3B2B10"/>
+  <text x="246" y="762" fill="#E2E8F0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">Retry Queue</text>
+  <text x="246" y="810" fill="#FCD34D" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700">14</text>
+
+  <rect x="376" y="724" width="132" height="120" rx="16" fill="#0D2B2A"/>
+  <text x="392" y="762" fill="#E2E8F0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">Integration</text>
+  <text x="392" y="810" fill="#6EE7B7" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700">Healthy</text>
+
+  <rect x="568" y="656" width="976" height="470" rx="22" fill="#111827" stroke="#1F2937"/>
+  <text x="596" y="698" fill="#A3E635" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700">
+    Section 5: Recent Activity
+  </text>
+
+  <rect x="596" y="724" width="920" height="54" rx="14" fill="#0F172A"/>
+  <text x="620" y="758" fill="#94A3B8" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">Clinic</text>
+  <text x="790" y="758" fill="#94A3B8" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">Patient / Appointment</text>
+  <text x="1090" y="758" fill="#94A3B8" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">What Happened</text>
+  <text x="1352" y="758" fill="#94A3B8" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">Status</text>
+
+  <rect x="596" y="792" width="920" height="68" rx="14" fill="#131D2E"/>
+  <text x="620" y="834" fill="#E2E8F0" font-family="Arial, Helvetica, sans-serif" font-size="18">Westside Clinic</text>
+  <text x="790" y="834" fill="#E2E8F0" font-family="Arial, Helvetica, sans-serif" font-size="18">John Doe - 10:30 AM</text>
+  <text x="1090" y="834" fill="#E2E8F0" font-family="Arial, Helvetica, sans-serif" font-size="18">Patient requested reschedule</text>
+  <text x="1352" y="834" fill="#FCD34D" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">Action Needed</text>
+
+  <rect x="596" y="872" width="920" height="68" rx="14" fill="#131D2E"/>
+  <text x="620" y="914" fill="#E2E8F0" font-family="Arial, Helvetica, sans-serif" font-size="18">Eastside Dental</text>
+  <text x="790" y="914" fill="#E2E8F0" font-family="Arial, Helvetica, sans-serif" font-size="18">Mary James - 2:00 PM</text>
+  <text x="1090" y="914" fill="#E2E8F0" font-family="Arial, Helvetica, sans-serif" font-size="18">Patient confirmed</text>
+  <text x="1352" y="914" fill="#6EE7B7" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">Confirmed</text>
+
+  <rect x="596" y="952" width="920" height="68" rx="14" fill="#131D2E"/>
+  <text x="620" y="994" fill="#E2E8F0" font-family="Arial, Helvetica, sans-serif" font-size="18">Northside Clinic</text>
+  <text x="790" y="994" fill="#E2E8F0" font-family="Arial, Helvetica, sans-serif" font-size="18">Apt Sync - 9:00 AM</text>
+  <text x="1090" y="994" fill="#E2E8F0" font-family="Arial, Helvetica, sans-serif" font-size="18">Sync failed and queued for retry</text>
+  <text x="1352" y="994" fill="#FCA5A5" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">Failed</text>
+
+  <text x="56" y="1150" fill="#64748B" font-family="Arial, Helvetica, sans-serif" font-size="16">
+    Priority: business operations first, system health second.
+  </text>
+</svg>

@@ -1,6 +1,7 @@
 from sqlalchemy import Column, String, Integer, DateTime, Text, func, ForeignKey, UniqueConstraint, Boolean, Enum, text
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.ext.declarative import declared_attr
+from sqlalchemy import Index
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from typing import Any, Optional
 from core.database import Base
@@ -86,7 +87,7 @@ class RegisteredClinics(Base, Autoid):
     calendar_id: Mapped[str] = mapped_column(String, nullable=False)
     operatory_calendar_map: Mapped[Optional[dict[str, list[dict[str, Any]]]]] = mapped_column(JSON, nullable=True)
     owner_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    dso_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("Dsos.id", ondelete="CASCADE"), nullable=True)
+    dso_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("Dsos.id", ondelete="CASCADE"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     dso = relationship("Dso", back_populates="clinics")
     owner = relationship("Users", back_populates="clinics")
@@ -222,4 +223,25 @@ class AppointmentSyncLog(Base, Autoid):
 
     __table_args__ = (
         UniqueConstraint("change_key", name="uq_appointment_sync_logs_change_key"),
+     
+        Index(
+            "ix_sync_logs_clinic_started_id",
+            "clinic_id",
+            "started_at",
+            "id"
+        ),
+        Index(
+            "ix_sync_logs_clinic_status_started_at",
+            "clinic_id",
+            "sync_status",
+            "started_at",
+            "id"
+        ),
+
+        Index(
+            "ix_sync_logs_started_id",
+            "started_at",
+            "id",
+        )
+
     )
