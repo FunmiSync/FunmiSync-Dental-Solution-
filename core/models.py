@@ -56,7 +56,7 @@ class Users(Base, Autoid):
     token_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     refresh_jti: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    clinics = relationship("RegisteredClinics", back_populates="owner", cascade="all, delete")
+    clinics = relationship("RegisteredClinics", back_populates="owner",foreign_keys="RegisteredClinics.owner_id", cascade="all, delete")
     dsos = relationship("Dso", back_populates="user", cascade="all, delete")
 
 
@@ -93,7 +93,7 @@ class RegisteredClinics(Base, Autoid):
     disabled_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True),ForeignKey("users.id", ondelete="SET NULL"),nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     dso = relationship("Dso", back_populates="clinics")
-    owner = relationship("Users", back_populates="clinics")
+    owner = relationship("Users", back_populates="clinics", foreign_keys=[owner_id])
     patients = relationship("Patients", back_populates="clinic", cascade="all, delete")
     appointments = relationship("Appointments", back_populates="clinic", cascade="all, delete")
 
