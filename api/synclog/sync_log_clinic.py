@@ -19,7 +19,7 @@ from infra.sync_log_events import clinic_sync_logs_channel, dso_sync_logs_channe
 from infra.sync_log_service import (
     build_clinic_page_snapshot,
     build_clinic_sync_log_detail,
-    build_page_snapshot,
+    build_clinic_page_snapshot_cached
 )
 
 
@@ -29,6 +29,7 @@ router = APIRouter(prefix = "/clinics",  tags= ["Sync Logs"])
 async def get_clinic_sync_logs_page(
     clinic_id: UUID,
     status: SyncStatus | None = Query(default=None),
+    search: str | None = Query(default=None, max_length=100),
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
     cursor: str | None = Query(default=None),
@@ -38,10 +39,11 @@ async def get_clinic_sync_logs_page(
 ):
     require_clinic_access(db=db, user_id=current_user.id, clinic_id=clinic_id)
 
-    return build_clinic_page_snapshot(
+    return build_clinic_page_snapshot_cached(
         db,
         clinic_id=clinic_id,
         status=status,
+        search=search,
         limit=limit,
         date_from=date_from,
         date_to=date_to,

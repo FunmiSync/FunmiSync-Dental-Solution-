@@ -68,6 +68,7 @@ def page_cache_key(
         scope_id: UUID,
         clinic_filter_id: UUID | None,
         status: str | None,
+        search: str | None,
         date_from: date | None,
         date_to: date | None,
         cursor: str | None,
@@ -78,6 +79,7 @@ def page_cache_key(
         f"sync_logs: page:{scope}:{scope_id}:"
         f"clinic: {value_str(clinic_filter_id)}:"
         f"status: {value_str(status)}:"
+        f"search:{value_str(search)}:"
         f"from:{date_str(resolved_from)}:"
         f"to:{date_str(resolved_to)}:"
         f"cursor:{cursor or 'first'}:"

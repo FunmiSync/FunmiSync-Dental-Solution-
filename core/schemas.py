@@ -287,3 +287,10 @@ class sync_log_detail_out(sync_log_row_out):
 
 
 
+###########  DSO CLINIC PAGE 
+class dso_clinic_summary_Out(BaseModel):
+    total_clinics: int
+    active_clinics: int
+    needs_attention: int
+    disabled_clinics: int
+    synced_today: int

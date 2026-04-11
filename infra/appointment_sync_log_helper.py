@@ -48,6 +48,13 @@ class AppointmentSyncLogService:
             sync_log_id=sync_log.id,
         )
     
+    def normalize_search_text(self, value: str | None) -> str | None:
+        if not value:
+            return None
+        
+        normalized= " ".join(value.lower().strip().split())
+        return normalized or None 
+    
     def get_or_create_sync_log(self, data: SyncLogInput) -> AppointmentSyncLog:
         change_key = self.build_change_key(data)
         sync_log = self.db.query(AppointmentSyncLog). filter_by(change_key = change_key).first()
@@ -62,6 +69,7 @@ class AppointmentSyncLogService:
                 event_id=data.event_id,
                 apt_num=data.apt_num,
                 patient_name=encrypt_secret(data.patient_name) if data.patient_name else None,
+                patient_name_search= self.normalize_search_text(data.patient_name),
                 direction=data.direction,
                 appointment_status=data.appointment_status,
                 sync_status=SyncStatus.QUEUED,

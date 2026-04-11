@@ -160,6 +160,25 @@ def _resolve_date_window(
     return start_dt, end_dt
 
 
+def apply_sync_log_search(query, search: str | None ):
+    if not search:
+        return query
+    
+    term = " ".join(search.lower().strip().split())
+    if not term:
+        return query
+
+    pattern = f"%{term}%"
+
+    return query.filter(
+        or_(
+            AppointmentSyncLog.patient_name_search.ilike(pattern),
+            AppointmentSyncLog.event_id.ilike(pattern),
+            AppointmentSyncLog.reason.ilike(pattern),
+        )
+    )
+
+
 def base_scope_query(db: Session, dso_id: UUID):
     return (
         db.query(AppointmentSyncLog, RegisteredClinics)
@@ -232,13 +251,12 @@ def build_dso_summary(
         failed=failed,
     )
 
-
 #DSO Summary cache
 def build_summary_cached(
         db: Session,
         *,
         dso_id: UUID,
-        clinic_id:UUID,
+        clinic_id:UUID | None,
         date_from: date | None,
         date_to: date | None
 )-> sync_log_summary_out:
@@ -373,6 +391,7 @@ def build_items(
     dso_id: UUID,
     clinic_id: UUID | None,
     status: SyncStatus | None,
+    search: str | None ,
     limit: int,
     date_from: date | None,
     date_to: date | None,
@@ -390,6 +409,8 @@ def build_items(
 
     if status is not None:
         query = query.filter(AppointmentSyncLog.sync_status == status)
+
+    query = apply_sync_log_search(query, search)
 
     if cursor:
         cursor_started_at, cursor_id = _decode_cursor(cursor)
@@ -434,6 +455,7 @@ def build_dso_items_cached(
         dso_id: UUID,
         clinic_id: UUID | None,
         status: SyncStatus | None,
+        search: str | None,
         limit: int,
         date_from: date | None,
         date_to: date | None,
@@ -444,6 +466,7 @@ def build_dso_items_cached(
         scope_id= dso_id,
         clinic_filter_id=clinic_id,
         status= status.value if status else None,
+        search=search,
         date_from=date_from,
         date_to=date_to,
         cursor= cursor,
@@ -460,6 +483,7 @@ def build_dso_items_cached(
         dso_id=dso_id,
         clinic_id=clinic_id,
         status=status,
+        search=search,
         limit=limit,
         date_from=date_from,
         date_to=date_to,
@@ -485,6 +509,7 @@ def build_clinic_items(
         *,
         clinic_id: UUID,
         status: SyncStatus | None,
+        search: str | None,
         limit: int,
         date_from: date | None,
         date_to: date | None,
@@ -498,6 +523,8 @@ def build_clinic_items(
 
     if status is not None:
         query = query.filter(AppointmentSyncLog.sync_status == status)
+
+    query = apply_sync_log_search(query, search)
     
     if cursor:
         cursor_started_at, cursor_id = _decode_cursor(cursor)
@@ -528,6 +555,7 @@ def build_clinic_items_cached(
         *,
         clinic_id:UUID,
         status: SyncStatus | None,
+        search: str | None,
         limit: int,
         date_from: date | None,
         date_to: date | None,
@@ -539,6 +567,7 @@ def build_clinic_items_cached(
             scope_id= clinic_id,
             clinic_filter_id= None,
             status= status.value if status else None,
+            search=search,
             date_from= date_from,
             date_to=date_to,
             cursor=cursor,
@@ -554,6 +583,7 @@ def build_clinic_items_cached(
             db,
             clinic_id=clinic_id,
             status=status,
+            search=search,
             limit=limit,
             date_from=date_from,
             date_to=date_to,
@@ -579,6 +609,7 @@ def build_page_snapshot(
     dso_id: UUID,
     clinic_id: UUID | None,
     status: SyncStatus | None,
+    search: str | None,
     limit: int,
     date_from: date | None,
     date_to: date | None,
@@ -589,6 +620,7 @@ def build_page_snapshot(
         dso_id=dso_id,
         clinic_id=clinic_id,
         status=status,
+        search=search,
         limit=limit,
         date_from=date_from,
         date_to=date_to,
@@ -618,6 +650,7 @@ def build_dso_page_snapshot_cached(
         dso_id:UUID,
         clinic_id: UUID| None,
         status: SyncStatus | None,
+        search: str | None,
         limit:int,
         date_from: date | None,
         date_to: date | None,
@@ -629,6 +662,7 @@ def build_dso_page_snapshot_cached(
         dso_id=dso_id,
         clinic_id=clinic_id,
         status=status,
+        search=search,
         limit=limit,
         date_from=date_from,
         date_to=date_to,
@@ -657,6 +691,7 @@ def build_clinic_page_snapshot(
         *,
         clinic_id: UUID,
         status: SyncStatus | None,
+        search: str | None,
         limit: int,
         date_from: date | None,
         date_to: date | None,
@@ -665,7 +700,7 @@ def build_clinic_page_snapshot(
 ) -> sync_log_page_out:
     
     items, next_cursor = build_clinic_items(
-        db, clinic_id = clinic_id, status=status, limit=limit, date_from = date_from, date_to = date_to, cursor=cursor 
+        db, clinic_id = clinic_id, status=status, search= search, limit=limit, date_from = date_from, date_to = date_to, cursor=cursor 
     )
     
     return sync_log_page_out(
@@ -687,6 +722,7 @@ def build_clinic_page_snapshot_cached(
     *,
     clinic_id: UUID,
     status: SyncStatus | None,
+    search: str | None,
     limit: int,
     date_from: date | None,
     date_to: date | None,
@@ -696,6 +732,7 @@ def build_clinic_page_snapshot_cached(
         db,
         clinic_id=clinic_id,
         status=status,
+        search=search,
         limit=limit,
         date_from=date_from,
         date_to=date_to,
@@ -715,8 +752,6 @@ def build_clinic_page_snapshot_cached(
         items=items,
         next_cursor=next_cursor,
     )
-
-
 
 ####dso level 
 def build_sync_log_detail(
