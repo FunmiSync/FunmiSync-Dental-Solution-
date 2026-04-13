@@ -108,9 +108,12 @@ class update_appointment_ghl(BaseModel):
 ################Authentication Schema 
 class loginresponse(BaseModel):
     access_token : str
+    csrf_token: str
 
 class refreshresponse(BaseModel):
     access_token: str
+    csrf_token: str
+
 
 
 class loginrequest(BaseModel):
