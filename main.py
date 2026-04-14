@@ -3,6 +3,7 @@ from core import database
 from api.routers import webhook_config, webhook_crm
 from core.middleware import RateLimitMiddleware
 from fastapi.middleware.cors import CORSMiddleware
+from api import dso_clinic_page
 from auth import login, logout
 from api.registration import user_registration, dso_registration, clinic_registration
 from api import invites
@@ -40,6 +41,7 @@ app.include_router(clinic_registration.router)
 app.include_router(invites.router)
 app.include_router(workspace.router)
 app.include_router(sync_log_dso.router)
+app.include_router(dso_clinic_page.router)
 app.include_router(sync_log_clinic.router)
 
 
