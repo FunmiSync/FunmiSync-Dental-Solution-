@@ -53,6 +53,11 @@ async def stream_dso_sync_logs_page(
     dso_id: UUID,
     request: Request,
 ):
+    logger.info(
+        "STREAM ROUTE USING MANUAL SESSIONLOCAL",
+        extra={"route": "dso_sync_logs_stream", "dso_id": str(dso_id)},
+    )
+    
     token = get_stream_token_from_request(request)
     if not token:
         logger.error("Invalid stream token")

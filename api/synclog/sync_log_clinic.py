@@ -56,7 +56,11 @@ async def stream_clinic_sync_logs_events(
     clinic_id: UUID,
     request: Request,
 ):
-    
+    logger.info(
+        "STREAM ROUTE USING MANUAL SESSIONLOCAL",
+        extra={"route": "dso_sync_logs_stream", "clinic_id": str(clinic_id)},
+    )
+
 
     token = get_stream_token_from_request(request)
     if not token:
