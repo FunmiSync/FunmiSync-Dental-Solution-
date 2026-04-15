@@ -212,7 +212,7 @@ def build_dso_clinic_list(
                     AppointmentSyncLog.sync_status == SyncStatus.PROCESSED
                 )
                 .label("synced_today"),
-                func.max(AppointmentSyncLog.started).label("last_sync_at"))
+                func.max(AppointmentSyncLog.started_at).label("last_sync_at"))
                 .filter(
                     AppointmentSyncLog.clinic_id.in_(clinic_ids)).group_by(
                         AppointmentSyncLog.clinic_id
