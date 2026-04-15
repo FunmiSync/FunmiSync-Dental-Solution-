@@ -8,13 +8,8 @@ from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 from auth.security import decode_secret, decode_json_secret
 from core.models import AppointmentSyncLog, RegisteredClinics, SyncStatus
-from core.schemas import (
-    sync_log_clinic_option_out,
-    sync_log_page_out,
-    sync_log_row_out,
-    sync_log_summary_out,
-    sync_log_detail_out
-)
+from core.schemas import (sync_log_clinic_option_out, sync_log_page_out, sync_log_row_out,
+sync_log_summary_out, sync_log_detail_out)
 from infra.sync_log_cache import (
     cache_get_json,
     cache_set_json,
@@ -23,6 +18,10 @@ from infra.sync_log_cache import (
     summary_cache_key,
     summary_ttl_seconds,
 )
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 
 SyncDirectionValue: TypeAlias = Literal["crm_to_od", "od_to_crm"]
@@ -270,6 +269,16 @@ def build_summary_cached(
 
     cached = cache_get_json(key)
     if cached:
+        logger.info(
+        "Sync log DSO summary cache hit",
+        extra={
+            "scope": "dso",
+            "dso_id": str(dso_id),
+            "clinic_filter_id": str(clinic_id) if clinic_id else None,
+            "date_from": str(date_from) if date_from else None,
+            "date_to": str(date_to) if date_to else None,
+        },
+        )
         return sync_log_summary_out(**cached)
     
     summary = build_dso_summary(
@@ -333,6 +342,15 @@ def build_clinic_level_summary_cached(
     ) 
     cached = cache_get_json(key)
     if cached:
+        logger.info(
+        "Sync log clinic summary cache hit",
+        extra={
+            "scope": "clinic",
+            "clinic_id": str(clinic_id),
+            "date_from": str(date_from) if date_from else None,
+            "date_to": str(date_to) if date_to else None,
+        },
+        )
         return sync_log_summary_out(**cached)
     
     summary = build_clinic_level_summary(
@@ -475,7 +493,21 @@ def build_dso_items_cached(
     
     cached= cache_get_json(key)
     if cached:
-        items= [sync_log_row_out(**item) for item in cached["items"]]
+        logger.info(
+            "Sync log DSO items cache hit",
+            extra={
+                "scope": "dso",
+                "dso_id": str(dso_id),
+                "clinic_filter_id": str(clinic_id) if clinic_id else None,
+                "status": status.value if status else None,
+                "search": search,
+                "limit": limit,
+                "date_from": str(date_from) if date_from else None,
+                "date_to": str(date_to) if date_to else None,
+                "cursor": cursor,
+            },
+        )
+        items = [sync_log_row_out(**item) for item in cached["items"]]
         return items, cached["next_cursor"]
     
     items, next_cursor = build_items(
@@ -576,6 +608,19 @@ def build_clinic_items_cached(
         
         cached = cache_get_json(key)
         if cached:
+            logger.info(
+                "Sync log clinic items cache hit",
+                extra={
+                    "scope": "clinic",
+                    "clinic_id": str(clinic_id),
+                    "status": status.value if status else None,
+                    "search": search,
+                    "limit": limit,
+                    "date_from": str(date_from) if date_from else None,
+                    "date_to": str(date_to) if date_to else None,
+                    "cursor": cursor,
+                },
+            )
             items = [sync_log_row_out(**item) for item in cached["items"]]
             return items, cached["next_cursor"]
         
