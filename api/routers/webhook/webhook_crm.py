@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy.exc import SQLAlchemyError
 from infra.clinic_health import mark_webhook_auth_failed,reset_webhook_failure_after_success
 from auth.security import encrypt_json_secret, encrypt_secret, hash_lookup
-from infra.dso_clinic_page_cache import invalidate_dso_clinic_list_cache
+from caches.dso_clinic_page_cache import invalidate_dso_clinic_list_cache
 from core.database import get_db
 from core.models import RegisteredClinics, InboundEvent, SyncDirection
 from core.queue import async_redis, appointments_queue

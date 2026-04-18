@@ -4,7 +4,7 @@ from uuid import UUID
 from redis.exceptions import RedisError
 from sqlalchemy.orm import Session
 from core.models import RegisteredClinics
-from infra.sync_log_cache import invalidate_hot_sync_log_cache
+from caches.sync_log_cache import invalidate_hot_sync_log_cache
 from core.queue import redis_client
 
 logger = logging.getLogger(__name__)

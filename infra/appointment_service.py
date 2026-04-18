@@ -4,8 +4,8 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from core.models import Appointments, RegisteredClinics, AppointmentSyncLog
 from core.schemas import AppointmentRequest, Appointments_create, Appointments_update, create_commslogs, create_pop_ups
 from datetime import datetime, timezone
-from infra.operatory_cache import (get_operatory_day_appointments_cached, set_operatory_day_appointments_cached, invalidate_operatory_day_cache)
-from infra.dso_clinic_page_cache import invalidate_dso_clinic_list_cache
+from caches.operatory_cache import (get_operatory_day_appointments_cached, set_operatory_day_appointments_cached, invalidate_operatory_day_cache)
+from caches.dso_clinic_page_cache import invalidate_dso_clinic_list_cache
 from infra.appointment_sync_log_helper import AppointmentSyncLogService
 from infra.clinic_health import mark_od_auth_failed, mark_od_health_ok
 from dataclasses import dataclass 

@@ -332,6 +332,23 @@ class dso_clinic_disabled_out(BaseModel):
     disabled_at: datetime
 
 
+class team_member_row_out(BaseModel):
+    user_id: UUID
+    email: str
+    role: Literal["admin", "manager", "staff"]
+    scope: Literal["dso", "clinic"]
+    joined_at: datetime
+
+
+class team_member_list_out(BaseModel):
+    generated_at: datetime
+    active_count: int
+    items: List[team_member_row_out]
+
+
+
+
+
 
 
 

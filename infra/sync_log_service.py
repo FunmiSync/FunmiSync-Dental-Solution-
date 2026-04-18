@@ -10,7 +10,7 @@ from auth.security import decode_secret, decode_json_secret
 from core.models import AppointmentSyncLog, RegisteredClinics, SyncStatus
 from core.schemas import (sync_log_clinic_option_out, sync_log_page_out, sync_log_row_out,
 sync_log_summary_out, sync_log_detail_out)
-from infra.sync_log_cache import (
+from caches.sync_log_cache import (
     cache_get_json,
     cache_set_json,
     page_cache_key,

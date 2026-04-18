@@ -1,16 +1,17 @@
 from fastapi import FastAPI
+from api.routers.webhook import webhook_config
 from core import database
-from api.routers import webhook_config, webhook_crm
+from api.routers.webhook import webhook_crm
 from core.middleware import RateLimitMiddleware
 from fastapi.middleware.cors import CORSMiddleware
-from api import dso_clinic_page
+from api.routers import dso_clinic_page
 from auth import login, logout
 from api.registration import user_registration, dso_registration, clinic_registration
-from api import invites
+from api.routers import invites
 import logging
-from api import workspace
-from api.synclog import sync_log_dso
-from api.synclog import sync_log_clinic
+from api.routers import workspace
+from api.routers.synclog import sync_log_dso
+from api.routers.synclog import sync_log_clinic
 
 
 log = logging.getLogger("uvicorn.error")
