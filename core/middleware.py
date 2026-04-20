@@ -18,10 +18,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         request_id = str(uuid.uuid4())
         request.state.request_id = request_id
         
-        path = request.url.path
-        if path.startswith("/login"):
-            return await call_next(request)
-        
+    
         identifier = self._get_identifier(request)
         key = f"rl:{identifier}"
         try: 

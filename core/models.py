@@ -53,7 +53,10 @@ class Users(Base, Autoid):
     username = Column(String, nullable=False)
     email = Column(String, nullable=False, unique=True)
     password = Column(String, nullable=False)
+    google_sub: Mapped[Optional[str]] = mapped_column(String, nullable=True, unique=True, index=True)
+    auth_provider: Mapped[str] = mapped_column(String, nullable=False, default="local", server_default="local")
     token_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
     refresh_jti: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     is_active: Mapped[bool] = mapped_column(
         Boolean,

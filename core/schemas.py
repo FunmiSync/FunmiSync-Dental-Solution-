@@ -123,6 +123,14 @@ class loginrequest(BaseModel):
 class logoutresponse(BaseModel):
     message : str 
 
+###################Googe registration  and login schema 
+class google_register_request(BaseModel):
+    username:str
+    credential:str
+
+class google_login_request(BaseModel):
+    credential:str
+
 ##################################UserRegistration and clinic registration 
 class usercreate(BaseModel):
     username:str 
@@ -344,6 +352,10 @@ class team_member_list_out(BaseModel):
     generated_at: datetime
     active_count: int
     items: List[team_member_row_out]
+
+
+
+
 
 
 

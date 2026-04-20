@@ -16,6 +16,8 @@ class Settings (BaseSettings):
     invite_ttl_hours: int = Field(..., env = ("invite_ttl_hours", "INVITE_TTL_HOURS")) # type: ignore
     redis_url: str = Field(..., env=("redis_url", "REDIS_URL"))  # type: ignore
     backend_base_url: str = Field(..., env=("backend_base_url", "BACKEND_BASE_URL"))  # type: ignore
+    google_client_id: str = Field(..., env=("google_client_id", "GOOGLE_CLIENT_ID"))  # type: ignore
+
 
 
 
