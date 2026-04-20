@@ -8,7 +8,7 @@ from  auth.security import encrypt_secret
 from infra.rbac import require_dso_manage
 import logging
 import secrets
-from cache.dso_clinic_page_cache import invalidate_dso_clinic_list_cache
+from caches.dso_clinic_page_cache import invalidate_dso_clinic_list_cache
 from sqlalchemy.exc import SQLAlchemyError
 from core.schemas import clinicout
 from uuid import UUID
