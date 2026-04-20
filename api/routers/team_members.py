@@ -28,7 +28,6 @@ async def get_dso_team_members(
 
 
 
-
 @router.get("/clinics/{clinic_id}/team", response_model=team_member_list_out)
 async def get_clinic_team_members(
     clinic_id: UUID,
