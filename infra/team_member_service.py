@@ -19,7 +19,7 @@ def to_member_row(*, assignment: RoleAssignment, user: Users)-> team_member_row_
         email= cast(str, user.email),
         role= assignment.role.value,
         scope= assignment.scope_type.value,
-        joined_at= assignment
+        joined_at= cast(datetime, assignment.created_at)
     )
 
 
