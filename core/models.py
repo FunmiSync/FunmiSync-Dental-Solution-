@@ -395,7 +395,7 @@ class AppointmentSyncLog(Base, Autoid):
     attempt_count: Mapped[int] = mapped_column(Integer,nullable=False,default=0,server_default="0",)
     operation: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     payload: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    failure_source: Mapped[SyncFailureSource] = mapped_column(Enum(SyncFailureSource, name="sync_failure_source_enum"), nullable=False, default=SyncFailureSource.NONE,server_default=SyncFailureSource.NONE.value,index=True)
+    failure_source: Mapped[SyncFailureSource] = mapped_column(Enum(SyncFailureSource, name="sync_failure_source_enum"), nullable=False, default=SyncFailureSource.NONE,server_default=SyncFailureSource.NONE.name ,index=True)
     counts_toward_usage: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False,server_default="false", index=True)
     is_billable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False,server_default="false", index=True)
     billing_processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True),nullable=True)
@@ -434,7 +434,7 @@ class Wallet(Base, Autoid):
 
     dso_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("Dsos.id", ondelete= "CASCADE"), nullable = True,  index= True)
 
-    clinic_id: Mapped[Optional[uuid.UUID]] =  mapped_column(UUID(as_uuid= True), ForeignKey("registered_clnic.id", ondelete= "CASCADE"), nullable= True, index =True)
+    clinic_id: Mapped[Optional[uuid.UUID]] =  mapped_column(UUID(as_uuid= True), ForeignKey("registered_clinics.id", ondelete= "CASCADE"), nullable= True, index =True)
 
     parent_wallet_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid= True), ForeignKey("wallets.id", ondelete= "SET NULL"), nullable= True, index = True)
 
@@ -480,9 +480,9 @@ class BillingSubscription(Base, Autoid):
 
     wallet_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid = True), ForeignKey("wallets.id", ondelete= "SET NULL"), nullable= True, index= True)
 
-    status: Mapped[SubscriptionStatus] = mapped_column(Enum(SubscriptionStatus, name= "subscription_status_enum"), nullable=False, default=SubscriptionStatus.TRAILING, server_default= SubscriptionStatus.TRAILING, index= True)
+    status: Mapped[SubscriptionStatus] = mapped_column(Enum(SubscriptionStatus, name= "subscription_status_enum"), nullable=False, default=SubscriptionStatus.TRAILING, server_default= SubscriptionStatus.TRAILING.name, index= True)
 
-    billing_cycle: Mapped[BillingCycle] = mapped_column(Enum(BillingCycle, name= "Billing_cycle_enum"), nullable= False, default= BillingCycle.MONTHLY, server_deafult = BillingCycle.MONTHLY.name)
+    billing_cycle: Mapped[BillingCycle] = mapped_column(Enum(BillingCycle, name= "Billing_cycle_enum"), nullable= False, default= BillingCycle.MONTHLY, server_default = BillingCycle.MONTHLY.name)
 
     payment_provider:  Mapped[PaymentProvider] = mapped_column(Enum(PaymentProvider, name= "payment_provider_enum"), nullable=False, default=PaymentProvider.STRIPE, server_default=PaymentProvider.STRIPE.name, index= True)
 
@@ -686,33 +686,29 @@ class PaymentTransaction(Base, Autoid):
 
     subscription_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("billing_subscriptions.id", ondelete="SET NULL"), nullable=True, index=True,)
 
-    provider: Mapped[PaymentProvider] = mapped_column(
-        Enum(PaymentProvider, name="payment_transaction_provider_enum"),
-        nullable=False,
-        index=True,
-    )
+    provider: Mapped[PaymentProvider] = mapped_column(Enum(PaymentProvider, name="payment_transaction_provider_enum"), nullable=False, index=True)
 
     purpose: Mapped[str] = mapped_column(String, nullable=False, index=True)
 
     amount_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
+
     currency: Mapped[str] = mapped_column(String, nullable=False, default="USD", server_default="USD")
 
     external_payment_id: Mapped[Optional[str]] = mapped_column(String, nullable=True, unique=True, index=True)
 
-    status: Mapped[PaymentTransactionStatus] = mapped_column(
-        Enum(PaymentTransactionStatus, name="payment_transaction_status_enum"),
-        nullable=False,
-        default=PaymentTransactionStatus.PENDING,
-        server_default=PaymentTransactionStatus.PENDING.name,
-        index=True,
+    status: Mapped[PaymentTransactionStatus] = mapped_column(Enum(PaymentTransactionStatus, name="payment_transaction_status_enum"), nullable=False, default=PaymentTransactionStatus.PENDING,server_default=PaymentTransactionStatus.PENDING.name, index=True,
     )
 
     idempotency_key: Mapped[str] = mapped_column(String, nullable=False, unique=True, index=True)
+
     failure_reason: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+
     details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
 
     succeeded_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     failed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     __table_args__ = (
