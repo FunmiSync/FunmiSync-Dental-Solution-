@@ -472,15 +472,15 @@ class Wallet(Base, Autoid):
 class BillingSubscription(Base, Autoid):
     __tablename__ = "billing_subscriptions"
 
-    scope_type: Mapped[ScopeType] = mapped_column(Enum(ScopeType, name="scope_type_enum"), nullable= False, Index =True)
+    scope_type: Mapped[ScopeType] = mapped_column(Enum(ScopeType, name="scope_type_enum"), nullable= False, index =True)
 
-    dso_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("Dso.id", ondelete= "CASCADE"), nullable= True, index = True)
+    dso_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("Dsos.id", ondelete= "CASCADE"), nullable= True, index = True)
 
     clinic_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid= True), ForeignKey("registered_clinics.id", ondelete= "CASCADE"), nullable= True, index= True )
 
     wallet_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid = True), ForeignKey("wallets.id", ondelete= "SET NULL"), nullable= True, index= True)
 
-    status: Mapped[SubscriptionStatus] = mapped_column(UUID(as_uuid= True), Enum(SubscriptionStatus, name= "subscription_status_enum"), nullable=False, default=SubscriptionStatus.TRAILING, server_default= SubscriptionStatus.TRAILING, index= True)
+    status: Mapped[SubscriptionStatus] = mapped_column(Enum(SubscriptionStatus, name= "subscription_status_enum"), nullable=False, default=SubscriptionStatus.TRAILING, server_default= SubscriptionStatus.TRAILING, index= True)
 
     billing_cycle: Mapped[BillingCycle] = mapped_column(Enum(BillingCycle, name= "Billing_cycle_enum"), nullable= False, default= BillingCycle.MONTHLY, server_deafult = BillingCycle.MONTHLY.name)
 
