@@ -1,5 +1,6 @@
 from sqlalchemy import Column, String, Integer, DateTime, Text, func, ForeignKey, UniqueConstraint, Date, BigInteger, Boolean, Enum, text
 from sqlalchemy.orm import relationship, Mapped, mapped_column
+from datetime import datetime, date
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy import Index
 from sqlalchemy.dialects.postgresql import JSON, UUID
