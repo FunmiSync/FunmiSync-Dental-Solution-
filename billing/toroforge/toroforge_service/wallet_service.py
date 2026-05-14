@@ -12,6 +12,7 @@ from billing.toroforge.exceptions import (
     ToroForgeWalletCreationError,
     ToroForgeValidationError
 )
+import asyncio 
 from billing.toroforge.toroforge_client.keystore_client import ToroForgeKeyStoreClient
 from billing.toroforge.toroforge_client.tns_client import ToroForgeTNSClient
 from billing.toroforge.types import ToroForgeProvisionWalletResult
@@ -207,6 +208,7 @@ class ToroForgeWalletService:
         generated_password = self.generate_wallet_password()
         encrypted_password = encrypt_secret(generated_password)
         external_address: str | None = None
+        
 
         try:
             logger.info(
@@ -266,10 +268,13 @@ class ToroForgeWalletService:
             )
 
 
-            verified = await self.keystore_client.verify_key(
-                address= external_address,
-                password= generated_password
-            )
+            verified = await self.verify_wallet_with_retry(
+                address=external_address,
+                password=generated_password,
+                wallet_id=wallet.id,
+                log_ctx=log_ctx,
+                )
+
 
             if not verified:
                 logger.error(
@@ -386,6 +391,56 @@ class ToroForgeWalletService:
              external_wallet_username= external_wallet_username, # type: ignore
             generated_password= generated_password,
         )
+
+
+    
+
+    async def verify_wallet_with_retry(
+            self,
+            *,
+            address: str,
+            password: str,
+            wallet_id: UUID,
+            log_ctx : dict,
+            attempts: int = 3,
+            delay_seconds: float = 2.0
+    ) -> bool:
+        
+        for attempt in range(1, attempts + 1):
+            verified = await self.keystore_client.verify_key(
+                address=address,
+                password=password
+            )
+
+            if verified:
+                logger.info(
+                    "ToroForge wallet verification passed",
+                    extra={
+                        **log_ctx,
+                        "wallet_id": str(wallet_id),
+                        "external_wallet_address": address,
+                        "attempt": attempt,
+                    },
+                )
+                return True
+
+            if attempt < attempts:
+                logger.warning(
+                    "ToroForge wallet verification returned false; retrying",
+                    extra={
+                        **log_ctx,
+                        "wallet_id": str(wallet_id),
+                        "external_wallet_address": address,
+                        "attempt": attempt,
+                        "max_attempts": attempts,
+                    },
+                )
+                await asyncio.sleep(delay_seconds)
+
+        return False
+
+
+
     
     def mark_wallet_failed(
             self,

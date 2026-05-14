@@ -1,5 +1,9 @@
 from billing.toroforge.toroforge_client.client import ToroForgeClient
 from billing.toroforge.exceptions import ToroForgeValidationError
+import logging 
+
+
+logger = logging.getLogger(__name__)
 
 class ToroForgeKeyStoreClient:
     def __init__(self, client: ToroForgeClient) -> None:
@@ -35,5 +39,34 @@ class ToroForgeKeyStoreClient:
             ],
         )
 
-        return bool(data.get("result"))
-    
+        logger.info(
+            "ToroForge verifykey response received",
+            extra={
+                "address_suffix": address[-8:] if len(address) > 8 else address,
+                "provider_response": data,
+            },
+        )
+
+        if "result" not in data:
+            raise ToroForgeValidationError(
+                f"ToroForge verifykey response missing result: {data}"
+            )
+
+        result = data["result"]
+
+        if isinstance(result, bool):
+            return result
+
+        if isinstance(result, int):
+            return result != 0
+
+        if isinstance(result, str):
+            normalized = result.strip().lower()
+            if normalized in {"true", "1", "yes", "ok", "success"}:
+                return True
+            if normalized in {"false", "0", "no", "failed"}:
+                return False
+
+        raise ToroForgeValidationError(
+            f"ToroForge verifykey returned unrecognized result: {data}"
+        )
