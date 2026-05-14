@@ -55,18 +55,14 @@ class ToroForgeKeyStoreClient:
         result = data["result"]
 
         if isinstance(result, bool):
-            return result
-
-        if isinstance(result, int):
-            return result != 0
-
-        if isinstance(result, str):
-            normalized = result.strip().lower()
-            if normalized in {"true", "1", "yes", "ok", "success"}:
+            if result:
                 return True
-            if normalized in {"false", "0", "no", "failed"}:
-                return False
-
+            
+            provider_error = data.get("error") or data.get("message") or str(data)
+            raise ToroForgeValidationError(
+                f"ToroForge verifykey failed: {provider_error}"
+            )
+            
         raise ToroForgeValidationError(
             f"ToroForge verifykey returned unrecognized result: {data}"
         )
