@@ -252,6 +252,7 @@ class ToroForgeWalletService:
                     **log_ctx,
                     "wallet_id": str(wallet.id),
                     "external_wallet_address": external_address,
+                    "tns username": username
                 },
             )
 
