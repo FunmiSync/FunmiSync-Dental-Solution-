@@ -67,7 +67,7 @@ class ToroForgeKYCClient:
 
         data = await self.client.call_write(
             method= "POST",
-            path="/payment/toro",
+            path="/api/payment/",
             op="check_kyc",
             params=params,
             headers=headers,
