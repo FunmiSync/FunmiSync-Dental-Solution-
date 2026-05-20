@@ -82,6 +82,13 @@ class WalletAuthorizationStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+
+class WalletCreationRequestStatus(str, enum.Enum):
+    IN_PROGRESS = "in_progress"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
 class PaymentProvider(str, enum.Enum):
     TOROFORGE =  "toroforge"
     STRIPE ="stripe"
@@ -471,6 +478,82 @@ class Wallet(Base, Autoid):
         Index("ix_walletss_dso_clinic_parent", "dso_id", "clinic_id", "parent_wallet_id")
     )
 
+
+class WalletCreationRequest(Base, Autoid):
+    __tablename__ = "wallet_creation_requests"
+
+    idempotency_key: Mapped[str] = mapped_column(String, nullable=False, unique=True, index=True)
+
+    scope_type: Mapped[ScopeType] = mapped_column(
+        Enum(ScopeType, name="wallet_creation_scope_type_enum"),
+        nullable=False,
+        index=True,
+    )
+
+    clinic_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("registered_clinics.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    dso_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("Dsos.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    wallet_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("wallets.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    wallet_type: Mapped[WalletType] = mapped_column(
+        Enum(WalletType, name="wallet_creation_wallet_type_enum"),
+        nullable=False,
+        index=True,
+    )
+
+    username: Mapped[str] = mapped_column(String, nullable=False)
+
+    initiated_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    status: Mapped[WalletCreationRequestStatus] = mapped_column(
+        Enum(WalletCreationRequestStatus, name="wallet_creation_request_status_enum"),
+        nullable=False,
+        default=WalletCreationRequestStatus.IN_PROGRESS,
+        server_default=WalletCreationRequestStatus.IN_PROGRESS.name,
+        index=True,
+    )
+
+    failure_reason: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        Index("ix_wallet_creation_requests_scope_status", "scope_type", "status"),
+        Index("ix_wallet_creation_requests_clinic_status", "clinic_id", "status"),
+        Index("ix_wallet_creation_requests_dso_status", "dso_id", "status"),
+    )
 
 
 class BillingSubscription(Base, Autoid):

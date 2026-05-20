@@ -5,8 +5,8 @@ import string
 from uuid import UUID
 from sqlalchemy.orm import Session, load_only
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
-from auth.security import encrypt_secret
-from core.models import Wallet, WalletStatus, WalletType, RegisteredClinics, Dso
+from auth.security import encrypt_secret, decode_secret
+from core.models import Wallet, WalletStatus, WalletType, RegisteredClinics, Dso, WalletCreationRequest, ScopeType, WalletCreationRequestStatus
 from billing.toroforge.exceptions import (
     ToroForgeDuplicateNameError,
     ToroForgeWalletCreationError,
@@ -36,7 +36,9 @@ class ToroForgeWalletService:
             self,
             *, 
             clinic_id: UUID,
-            username: str 
+            username:str,
+            idempotency_key: str,
+            initiated_by_user_id:UUID | None = None, 
     ) -> ToroForgeProvisionWalletResult:
 
         logger.info(
@@ -68,11 +70,14 @@ class ToroForgeWalletService:
             )
             raise ToroForgeWalletCreationError("Clinic not found ")
 
-        return await self.create_and_provision_wallet(
-            username= username,
+        return await self.create_and_provision_wallet_with_idempotency(
+            idempotency_key = idempotency_key,
+            scope_type = ScopeType.CLINIC,
             wallet_type=WalletType.CLINIC,
+            username= username,
             clinic_id = clinic_id,
-            dso_id= clinic.dso_id 
+            dso_id= clinic.dso_id,
+            initiated_by_user_id = initiated_by_user_id
             )
     
 
@@ -81,7 +86,9 @@ class ToroForgeWalletService:
         self,
         *,
         dso_id: UUID,
-        username:str
+        username:str,
+        idempotency_key: str,
+        initiated_by_user_id: UUID | None = None
          )-> ToroForgeProvisionWalletResult:
         
         logger.info(
@@ -102,17 +109,133 @@ class ToroForgeWalletService:
                     "dso_id": str(dso_id),
                     "username": username,
                     "wallet_type": WalletType.DSO_TREASURY.value,
+                    "idempotency_key": idempotency_key
                 },
             )
             raise ToroForgeWalletCreationError("DSO not found")
         
-        return await self.create_and_provision_wallet(
-            username=username,
+        return await self.create_and_provision_wallet_with_idempotency(
+            idempotency_key = idempotency_key,
+            scope_type= ScopeType.DSO,
             wallet_type=WalletType.DSO_TREASURY,
             clinic_id=None,
             dso_id=dso_id,
+            username=username,
+            initiated_by_user_id=initiated_by_user_id,
         )
     
+
+
+    async def create_and_provision_wallet_with_idempotency(
+            self,
+            *,
+            idempotency_key: str,
+            scope_type: ScopeType,
+            wallet_type: WalletType,
+            clinic_id: UUID | None,
+            dso_id: UUID | None,
+            username: str,
+            initiated_by_user_id: UUID | None = None
+    )-> ToroForgeProvisionWalletResult:
+        
+        normalized_key = idempotency_key.strip()
+        normalized_username = self.normalize_username(username)
+
+        if not normalized_key:
+            raise ToroForgeValidationError("Idempotency key is required")
+        
+        request_row = self.db.query(WalletCreationRequest).filter(WalletCreationRequest.idempotency_key == normalized_key).first()
+
+        if request_row:
+            self.ensure_same_wallet_creation_request(
+                request_row = request_row,
+                scope_type=scope_type,
+                wallet_type=wallet_type,
+                clinic_id=clinic_id,
+                dso_id=dso_id,
+                username=normalized_username
+            )
+            return self.resolve_existing_wallet_creation_request(request_row=request_row)
+        
+        request_row = WalletCreationRequest(
+            idempotency_key = normalized_key,
+            scope_type=scope_type,
+            clinic_id=clinic_id,
+            dso_id=dso_id,
+            wallet_type=wallet_type,
+            username=normalized_username,
+            initiated_by_user_id=initiated_by_user_id,
+            status=WalletCreationRequestStatus.IN_PROGRESS,
+            failure_reason=None
+        )
+        self.db.add(request_row)
+
+        try:
+            self.db.commit()
+            self.db.refresh(request_row)
+
+        except IntegrityError:
+            request_row = (
+                self.db.query(WalletCreationRequest).filter(WalletCreationRequest.idempotency_key== normalized_key).first()
+            )
+            if not request_row:
+                raise ToroForgeWalletCreationError(
+                    "Unable to create or reload wallet creation request"
+                )
+            
+            self.ensure_same_wallet_creation_request(
+                request_row = request_row,
+                scope_type = scope_type,
+                wallet_type=wallet_type,
+                clinic_id= clinic_id,
+                dso_id= dso_id,
+                username= normalized_username
+            )
+            return self.resolve_existing_wallet_creation_request(request_row=request_row)
+        
+        try:
+            result = await self.create_and_provision_wallet(
+                    username=normalized_username,
+                    wallet_type=wallet_type,
+                    clinic_id=clinic_id,
+                    dso_id=dso_id
+            )
+        
+        except Exception as exc:
+            request_row.status = WalletCreationRequestStatus.FAILED
+            request_row.failure_reason = str(exc)
+            self.commit_wallet_creation_request(
+                request_row,
+                action="saving failed wallet creation request",
+                log_ctx={
+                    "idempotency_key": normalized_key,
+                    "clinic_id": str(clinic_id) if clinic_id else None,
+                    "dso_id": str(dso_id) if dso_id else None,
+                    "wallet_type": wallet_type.value,
+                },
+            )
+            raise
+
+        request_row.status = WalletCreationRequestStatus.SUCCEEDED
+        request_row.wallet_id = result.wallet_id
+        request_row.failure_reason = None
+        self.commit_wallet_creation_request(
+            request_row,
+            action="saving successful wallet creation request",
+            log_ctx={
+                "idempotency_key": normalized_key,
+                "wallet_id": str(result.wallet_id),
+                "clinic_id": str(clinic_id) if clinic_id else None,
+                "dso_id": str(dso_id) if dso_id else None,
+                "wallet_type": wallet_type.value,
+            }
+        )
+
+        return result 
+    
+    
+
+
 
     async def create_and_provision_wallet(
             self,
@@ -369,7 +492,7 @@ class ToroForgeWalletService:
             raise ToroForgeWalletCreationError(
                 "ToroForge wallet provisioning completed without an external wallet address"
             )
-
+        
         if wallet.external_wallet_username is None:
             raise ToroForgeWalletCreationError(
                 "ToroForge wallet provisioning completed without an external wallet username"
@@ -437,8 +560,76 @@ class ToroForgeWalletService:
         return False
 
 
+    def ensure_same_wallet_creation_request(
+        self,
+        *,
+        request_row: WalletCreationRequest,
+        scope_type: ScopeType,
+        wallet_type: WalletType,
+        clinic_id: UUID | None,
+        dso_id: UUID | None,
+        username: str 
+    ) -> None:
+        if (
+            request_row.scope_type != scope_type
+            or request_row.wallet_type != wallet_type
+            or request_row.clinic_id != clinic_id
+            or request_row.dso_id != dso_id
+            or request_row.username != username
+        ):
+            raise ToroForgeValidationError( "Idempotency Key was already used for a different wallet creation request")
 
-    
+
+
+    def resolve_existing_wallet_creation_request(
+            self,
+            *,
+            request_row: WalletCreationRequest
+    )-> ToroForgeProvisionWalletResult:
+        if request_row.status == WalletCreationRequestStatus.IN_PROGRESS:
+            raise ToroForgeValidationError(
+                "Wallet creation request is already in progress"
+            )
+        if request_row.status == WalletCreationRequest.FAILED:
+            raise ToroForgeWalletCreationError(
+                request_row.failure_reason
+                or "Wallet creation previously failed for this idempotency key"
+            )
+
+        if not request_row.wallet_id:
+            raise ToroForgeWalletCreationError(
+                "Successful wallet creation request has no wallet reference"
+            )
+        
+        wallet = self.db.query(Wallet).filter(Wallet).filter(Wallet.id == request_row.wallet_id).first()
+        if  not wallet:
+            raise ToroForgeWalletCreationError(
+                "Wallet referenced by wallet creation request was not found"
+            )
+
+        if (
+            wallet.external_wallet_address is None
+            or wallet.external_wallet_username is None
+            or wallet.external_wallet_password_encrypted is None
+        ):
+            raise ToroForgeWalletCreationError(
+                "Wallet referenced by wallet creation request is incomplete"
+            )
+
+        decrypted_password = decode_secret(wallet.external_wallet_password_encrypted)
+        if decrypted_password is None:
+            raise ToroForgeWalletCreationError(
+                "Wallet referenced by wallet creation request has no decryptable password"
+            )
+
+        return ToroForgeProvisionWalletResult(
+            wallet_id=wallet.id,
+            external_wallet_address=wallet.external_wallet_address,
+            external_wallet_username=wallet.external_wallet_username,
+            generated_password=decrypted_password,
+        )
+
+
     def mark_wallet_failed(
             self,
             wallet: Wallet,
@@ -499,6 +690,27 @@ class ToroForgeWalletService:
                 f"Database error while {action}"
             ) from exc
         
+
+    def commit_wallet_creation_request(
+            self,
+            request_row: WalletCreationRequest,
+            *,
+            action:str, 
+            log_ctx: dict
+    )-> None:
+        
+        try:
+            self.db.commit()
+            self.db.refresh(request_row)
+        except SQLAlchemyError as exc:
+            self.db.rollback()
+            logger.exception(
+                "ToroForge wallet creation request commit failed",
+                extra={**log_ctx, "action": action},
+            )
+            raise ToroForgeWalletCreationError(
+                f"Database error while {action}"
+            ) from exc
 
 
     def normalize_username(

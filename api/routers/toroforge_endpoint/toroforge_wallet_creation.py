@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator
 from typing import NoReturn
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Header
 from sqlalchemy.orm import Session
 
 from auth.oauth2 import get_current_user
@@ -148,6 +148,7 @@ async def create_standalone_clinic_wallet(
     request: Request,
     current_user: Users = Depends(get_current_user),
     db: Session = Depends(get_db),
+    idempotency_key: str = Header(..., alias= "Idempotency-key"),
     wallet_service: ToroForgeWalletService = Depends(get_toroforge_wallet_service),
 ):
     clinic = require_standalone_clinic_wallet_create_access(
@@ -171,6 +172,9 @@ async def create_standalone_clinic_wallet(
         result = await wallet_service.create_and_provision_clinic_wallet(
             clinic_id=clinic.id,
             username=payload.username,
+            idempotency_key=idempotency_key,
+            initiated_by_user_id= current_user.id
+
         )
     except Exception as exc:
         logger.exception("ToroForge standalone clinic wallet create failed", extra=log_ctx)
@@ -204,6 +208,7 @@ async def create_dso_clinic_wallet(
     request: Request,
     current_user: Users = Depends(get_current_user),
     db: Session = Depends(get_db),
+    idempotency_key: str = Header(..., alias= "Idempotency-key"),
     wallet_service: ToroForgeWalletService = Depends(get_toroforge_wallet_service),
 ):
     clinic = require_dso_clinic_wallet_create_access(
@@ -226,9 +231,11 @@ async def create_dso_clinic_wallet(
     logger.info("ToroForge DSO clinic wallet create requested", extra=log_ctx)
 
     try:
-        result = await wallet_service.create_and_provision_dso_wallet(
-            dso_id=dso_id,
+        result = await wallet_service.create_and_provision_clinic_wallet(
+            clinic_id=clinic.id,
             username=payload.username,
+            idempotency_key= idempotency_key,
+            initiated_by_user_id=current_user.id
         )
     except Exception as exc:
         logger.exception("ToroForge DSO clinic wallet create failed", extra=log_ctx)
@@ -262,6 +269,7 @@ async def create_dso_treasury_wallet(
     request: Request,
     current_user: Users = Depends(get_current_user),
     db: Session = Depends(get_db),
+    idempotency_key: str = Header(..., alias= "Idempotency-key"),
     wallet_service: ToroForgeWalletService = Depends(get_toroforge_wallet_service),
 ):
     require_dso_manage(db=db, user_id=current_user.id, dso_id=dso_id)
@@ -280,6 +288,8 @@ async def create_dso_treasury_wallet(
         result = await wallet_service.create_and_provision_dso_wallet(
             dso_id=dso_id,
             username=payload.username,
+            idempotency_key= idempotency_key,
+            initiated_by_user_id= current_user.id
         )
     except Exception as exc:
         logger.exception("ToroForge DSO treasury wallet create failed", extra=log_ctx)
