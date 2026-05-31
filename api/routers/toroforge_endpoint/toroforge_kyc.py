@@ -158,7 +158,7 @@ def require_wallet_view_access(
 
 @router.post(
     "/wallets/{wallet_id}/kyc",
-    status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+    status_code=200,
 )
 async def start_wallet_kyc(
     wallet_id: UUID,
@@ -188,7 +188,7 @@ async def start_wallet_kyc(
 
     logger.info("ToroForge wallet KYC redirect generated", extra=log_ctx)
 
-    return RedirectResponse(url=kyc_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+    return kyc_url
 
 
 

@@ -427,8 +427,13 @@ class toroforge_wallet_ledger_row_out(BaseModel):
     ledger_entry_id: UUID
     wallet_id: UUID
     wallet_label: str
+    counterparty_wallet_id: Optional[UUID] = None
+    counterparty_wallet_label: Optional[str] = None
+    counterparty_clinic_id: Optional[UUID] = None
+    counterparty_clinic_name: Optional[str] = None
     event_type: str
     event_label: str
+    event_subtitle: Optional[str] = None
     direction: Literal["debit", "credit"]
     status: str
     amount_minor: int
@@ -450,8 +455,7 @@ class toroforge_billing_subscription_out(BaseModel):
     payment_provider: str 
 
 
-class toroforge_dso_billing_out:
-    has_wallet: bool
+class toroforge_dso_billing_out(BaseModel):
     has_wallet: bool
     next_action: Optional[Literal["create_wallet"]] = None
     message: Optional[str] = None
@@ -460,6 +464,24 @@ class toroforge_dso_billing_out:
     treasury_wallet: Optional[toroforge_wallet_read_item_out] = None
     clinic_wallet_count: int = 0
     clinic_wallets: List[toroforge_wallet_read_item_out] = Field(default_factory=list)
+    wallet_inflow_this_month_minor: int = 0
+    premium_charges_this_month_minor: int = 0
+    failed_payment_count: int = 0
+    billing_health_status: Optional[Literal["good", "attention"]] = None
+    billing_health_reason: Optional[str] = None
+    recent_ledger: List[toroforge_wallet_ledger_row_out] = Field(default_factory=list)
+    active_subscription: Optional[toroforge_billing_subscription_out] = None
+
+
+class toroforge_clinic_billing_out(BaseModel):
+    has_wallet:bool
+    next_action: Optional[Literal["create_wallet"]] = None
+    message: Optional[str] = None
+    generated_at: Optional[datetime] = None
+    clinic_id: UUID
+    dso_id: Optional[UUID] = None
+    clinic_wallet: Optional[toroforge_wallet_read_item_out] = None
+    parent_wallet_label: Optional[str] = None
     wallet_inflow_this_month_minor: int = 0
     premium_charges_this_month_minor: int = 0
     failed_payment_count: int = 0
@@ -478,33 +500,4 @@ class toroforge_dso_billing_out:
 
 
 
-
-
-
-
-
-
-
-
-
-    
-# log.info(
-#     "Clinic disabled by DSO user",
-#     extra={
-#         "dso_id": str(dso_id),
-#         "clinic_id": str(clinic_id),
-#         "disabled_by": str(disabled_by),
-#     },
-# )
-
-
-
-# log.exception(
-#     "Failed to disable clinic",
-#     extra={
-#         "dso_id": str(dso_id),
-#         "clinic_id": str(clinic_id),
-#         "disabled_by": str(disabled_by),
-#     },
-# )
 

@@ -585,7 +585,8 @@ class ToroForgeWalletService:
             self,
             *,
             request_row: WalletCreationRequest
-    )-> ToroForgeProvisionWalletResult:
+    ) :
+        
         if request_row.status == WalletCreationRequestStatus.IN_PROGRESS:
             raise ToroForgeValidationError(
                 "Wallet creation request is already in progress"
@@ -616,17 +617,11 @@ class ToroForgeWalletService:
                 "Wallet referenced by wallet creation request is incomplete"
             )
 
-        decrypted_password = decode_secret(wallet.external_wallet_password_encrypted)
-        if decrypted_password is None:
-            raise ToroForgeWalletCreationError(
-                "Wallet referenced by wallet creation request has no decryptable password"
-            )
-
         return ToroForgeProvisionWalletResult(
             wallet_id=wallet.id,
             external_wallet_address=wallet.external_wallet_address,
             external_wallet_username=wallet.external_wallet_username,
-            generated_password=decrypted_password,
+            generated_password="",
         )
 
 

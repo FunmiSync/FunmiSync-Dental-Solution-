@@ -84,10 +84,9 @@ class ToroForgeKYCService:
             raise ToroForgeValidationError("Wallet has no external address")
         
         address = wallet.external_wallet_address.strip()
-        kyc_url = (
-            f"{self.kyc_client.client.config.connectw_url.rstrip('/')}"
-            f"/KYC/project-verify?address={quote(address)}"
-        )
+        kyc_url =  f"{self.kyc_client.client.config.connectw_url.rstrip('/')}" 
+        f"/KYC/project-verify?address={quote(address)}"
+        
 
         return kyc_url
         
