@@ -416,6 +416,8 @@ class toroforge_wallet_read_item_out(BaseModel):
     status: str 
     currency: str 
     available_balance_minor: int 
+    available_balance: Optional[str] = None
+    available_balance_display: Optional[str] = None
     external_wallet_username: Optional[str] = None
     external_wallet_address: Optional[str] = None
     auto_debit_enabled: bool 
@@ -437,7 +439,11 @@ class toroforge_wallet_ledger_row_out(BaseModel):
     direction: Literal["debit", "credit"]
     status: str
     amount_minor: int
+    amount: Optional[str] = None
+    amount_display: Optional[str] = None
     balance_after_minor: Optional[int] = None
+    balance_after: Optional[str] = None
+    balance_after_display: Optional[str] = None
     currency: str
     created_at: datetime
     posted_at: Optional[datetime] = None
@@ -451,6 +457,8 @@ class toroforge_billing_subscription_out(BaseModel):
     status: str
     next_billing_at: Optional[datetime] = None
     amount_minor: int
+    amount: Optional[str] = None
+    amount_display: Optional[str] = None
     currency: str
     payment_provider: str 
 
@@ -465,7 +473,11 @@ class toroforge_dso_billing_out(BaseModel):
     clinic_wallet_count: int = 0
     clinic_wallets: List[toroforge_wallet_read_item_out] = Field(default_factory=list)
     wallet_inflow_this_month_minor: int = 0
+    wallet_inflow_this_month: Optional[str] = None
+    wallet_inflow_this_month_display: Optional[str] = None
     premium_charges_this_month_minor: int = 0
+    premium_charges_this_month: Optional[str] = None
+    premium_charges_this_month_display: Optional[str] = None
     failed_payment_count: int = 0
     billing_health_status: Optional[Literal["good", "attention"]] = None
     billing_health_reason: Optional[str] = None
@@ -483,7 +495,11 @@ class toroforge_clinic_billing_out(BaseModel):
     clinic_wallet: Optional[toroforge_wallet_read_item_out] = None
     parent_wallet_label: Optional[str] = None
     wallet_inflow_this_month_minor: int = 0
+    wallet_inflow_this_month: Optional[str] = None
+    wallet_inflow_this_month_display: Optional[str] = None
     premium_charges_this_month_minor: int = 0
+    premium_charges_this_month: Optional[str] = None
+    premium_charges_this_month_display: Optional[str] = None
     failed_payment_count: int = 0
     billing_health_status: Optional[Literal["good", "attention"]] = None
     billing_health_reason: Optional[str] = None

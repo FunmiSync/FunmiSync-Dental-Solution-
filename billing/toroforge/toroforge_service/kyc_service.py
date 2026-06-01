@@ -32,8 +32,8 @@ class ToroForgeKYCService:
 
 
         response = await self.kyc_client.check_address_verified(address=address)
-
-
+       
+        
         logger.info(
             "ToroForge address verification completed",
             extra={
@@ -53,6 +53,7 @@ class ToroForgeKYCService:
                 load_only(
                     Wallet.id,
                     Wallet.external_wallet_address,
+                    Wallet.kyc_verified,
                 )
             )
             .filter(Wallet.id == wallet_id)
@@ -63,9 +64,21 @@ class ToroForgeKYCService:
         if not wallet.external_wallet_address:
             raise ToroForgeValidationError("Wallet has no external address")
 
-        return await self.get_address_verification_status(
+        status = await self.get_address_verification_status(
             address=wallet.external_wallet_address
         )
+
+        wallet.kyc_verified = status["verified"]
+
+        try:
+            self.db.add(wallet)
+            self.db.commit()
+            self.db.refresh(wallet)
+        except Exception:
+            self.db.rollback()
+            raise
+
+        return status
     
     
 
@@ -84,8 +97,10 @@ class ToroForgeKYCService:
             raise ToroForgeValidationError("Wallet has no external address")
         
         address = wallet.external_wallet_address.strip()
-        kyc_url =  f"{self.kyc_client.client.config.connectw_url.rstrip('/')}" 
-        f"/KYC/project-verify?address={quote(address)}"
+        kyc_url = (
+            f"{self.kyc_client.client.config.connectw_url.rstrip('/')}"
+            f"/KYC/project-verify?address={quote(address)}"
+        )
         
 
         return kyc_url

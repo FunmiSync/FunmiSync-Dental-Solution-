@@ -465,6 +465,8 @@ class Wallet(Base, Autoid):
 
     last_balance_sync_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable= True)
 
+    kyc_verified: Mapped[bool] = mapped_column(Boolean, nullable= False, index= True, server_default="false")
+
     failure_reason: Mapped[Optional[str]] = mapped_column(String, nullable= True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone= True), nullable= False, server_default=func.now())

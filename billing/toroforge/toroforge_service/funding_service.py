@@ -87,6 +87,10 @@ class ToroForgeFundingService:
         if not wallet.external_wallet_address:
             raise ToroForgeValidationError("Wallet has no external ToroForge address")
         
+        if wallet.kyc_verified is not True:
+            raise ToroForgeValidationError("Wallet Kyc has not been Verified")
+
+        
         idempotency_key = self.build_funding_idempotency_key(request_id)
         ledger_idempotency_key = f"funding-ledger:{request_id}"
 

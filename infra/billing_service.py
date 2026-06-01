@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal, ROUND_HALF_UP
 from uuid import UUID
 
 from sqlalchemy import func
@@ -43,6 +44,73 @@ def month_window() -> tuple[datetime, datetime]:
     else:
         end = start.replace(month=start.month + 1)
     return start, end
+
+
+def currency_decimals(currency: str) -> int:
+    decimals_map = {
+        "USD": 2,
+        "EUR": 2,
+        "GBP": 2,
+        "NGN": 2,
+    }
+    return decimals_map.get(currency.strip().upper(), 2)
+
+
+def money_from_minor(*, amount_minor: int, currency: str) -> Decimal:
+    decimals = currency_decimals(currency)
+    multiplier = Decimal(10) ** decimals
+    quantizer = Decimal("1").scaleb(-decimals)
+    return (Decimal(amount_minor) / multiplier).quantize(
+        quantizer,
+        rounding=ROUND_HALF_UP,
+    )
+
+
+def money_amount_string(*, amount_minor: int, currency: str) -> str:
+    decimals = currency_decimals(currency)
+    amount = money_from_minor(amount_minor=amount_minor, currency=currency)
+    return f"{amount:.{decimals}f}"
+
+
+def money_display_string(*, amount_minor: int, currency: str) -> str:
+    decimals = currency_decimals(currency)
+    amount = money_from_minor(amount_minor=amount_minor, currency=currency)
+    formatted_amount = f"{amount:,.{decimals}f}"
+    zero_fraction = "." + ("0" * decimals)
+
+    if decimals > 0 and formatted_amount.endswith(zero_fraction):
+        formatted_amount = formatted_amount[: -len(zero_fraction)]
+
+    symbols = {
+        "USD": "$",
+    }
+    normalized_currency = currency.strip().upper()
+    prefix = symbols.get(normalized_currency)
+
+    if prefix:
+        return f"{prefix}{formatted_amount}"
+
+    return f"{formatted_amount} {normalized_currency}"
+
+
+def optional_money_amount_string(
+    *,
+    amount_minor: int | None,
+    currency: str,
+) -> str | None:
+    if amount_minor is None:
+        return None
+    return money_amount_string(amount_minor=amount_minor, currency=currency)
+
+
+def optional_money_display_string(
+    *,
+    amount_minor: int | None,
+    currency: str,
+) -> str | None:
+    if amount_minor is None:
+        return None
+    return money_display_string(amount_minor=amount_minor, currency=currency)
 
 
 def wallet_label(*, wallet: Wallet, clinic_name: str | None = None) -> str:
@@ -176,6 +244,14 @@ def to_wallet_item(
         status=wallet.status.value,
         currency=wallet.currency,
         available_balance_minor=wallet.cached_balance_minor,
+        available_balance=money_amount_string(
+            amount_minor=wallet.cached_balance_minor,
+            currency=wallet.currency,
+        ),
+        available_balance_display=money_display_string(
+            amount_minor=wallet.cached_balance_minor,
+            currency=wallet.currency,
+        ),
         external_wallet_username=wallet.external_wallet_username,
         external_wallet_address=wallet.external_wallet_address,
         auto_debit_enabled=wallet.auto_debit_enabled,
@@ -217,7 +293,23 @@ def to_ledger_row(
         direction=entry.direction.value,
         status=entry.status.value,
         amount_minor=entry.amount_minor,
+        amount=money_amount_string(
+            amount_minor=entry.amount_minor,
+            currency=entry.currency,
+        ),
+        amount_display=money_display_string(
+            amount_minor=entry.amount_minor,
+            currency=entry.currency,
+        ),
         balance_after_minor=entry.balance_after_minor,
+        balance_after=optional_money_amount_string(
+            amount_minor=entry.balance_after_minor,
+            currency=entry.currency,
+        ),
+        balance_after_display=optional_money_display_string(
+            amount_minor=entry.balance_after_minor,
+            currency=entry.currency,
+        ),
         currency=entry.currency,
         created_at=entry.created_at,
         posted_at=entry.posted_at,
@@ -233,6 +325,14 @@ def to_subscription_item(subscription: BillingSubscription) -> toroforge_billing
         status=subscription.status.value,
         next_billing_at=subscription.next_billing_at,
         amount_minor=subscription.base_price_minor,
+        amount=money_amount_string(
+            amount_minor=subscription.base_price_minor,
+            currency=subscription.currency,
+        ),
+        amount_display=money_display_string(
+            amount_minor=subscription.base_price_minor,
+            currency=subscription.currency,
+        ),
         currency=subscription.currency,
         payment_provider=subscription.payment_provider.value,
     )
@@ -415,7 +515,23 @@ def build_dso_billing_command_center_cached(
         clinic_wallet_count=len(clinic_wallets),
         clinic_wallets=clinic_wallets,
         wallet_inflow_this_month_minor=wallet_inflow_this_month_minor,
+        wallet_inflow_this_month=money_amount_string(
+            amount_minor=wallet_inflow_this_month_minor,
+            currency=treasury_wallet.currency,
+        ),
+        wallet_inflow_this_month_display=money_display_string(
+            amount_minor=wallet_inflow_this_month_minor,
+            currency=treasury_wallet.currency,
+        ),
         premium_charges_this_month_minor=premium_charges_this_month_minor,
+        premium_charges_this_month=money_amount_string(
+            amount_minor=premium_charges_this_month_minor,
+            currency=treasury_wallet.currency,
+        ),
+        premium_charges_this_month_display=money_display_string(
+            amount_minor=premium_charges_this_month_minor,
+            currency=treasury_wallet.currency,
+        ),
         failed_payment_count=failed_payment_count,
         billing_health_status="good" if failed_payment_count == 0 else "attention",
         billing_health_reason=(
@@ -542,7 +658,23 @@ def build_clinic_billing_command_center_cached(
         clinic_wallet=to_wallet_item(wallet=clinic_wallet, clinic_name=clinic.clinic_name),
         parent_wallet_label="DSO Wallet" if clinic.dso_id else None,
         wallet_inflow_this_month_minor=wallet_inflow_this_month_minor,
+        wallet_inflow_this_month=money_amount_string(
+            amount_minor=wallet_inflow_this_month_minor,
+            currency=clinic_wallet.currency,
+        ),
+        wallet_inflow_this_month_display=money_display_string(
+            amount_minor=wallet_inflow_this_month_minor,
+            currency=clinic_wallet.currency,
+        ),
         premium_charges_this_month_minor=premium_charges_this_month_minor,
+        premium_charges_this_month=money_amount_string(
+            amount_minor=premium_charges_this_month_minor,
+            currency=clinic_wallet.currency,
+        ),
+        premium_charges_this_month_display=money_display_string(
+            amount_minor=premium_charges_this_month_minor,
+            currency=clinic_wallet.currency,
+        ),
         failed_payment_count=failed_payment_count,
         billing_health_status="good" if failed_payment_count == 0 else "attention",
         billing_health_reason=(
