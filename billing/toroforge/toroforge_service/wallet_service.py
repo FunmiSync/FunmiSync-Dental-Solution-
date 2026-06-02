@@ -619,8 +619,7 @@ class ToroForgeWalletService:
         return ToroForgeProvisionWalletResult(
             wallet_id=wallet.id,
             external_wallet_address=wallet.external_wallet_address,
-            external_wallet_username=wallet.external_wallet_username,
-            generated_password="",
+            external_wallet_username=wallet.external_wallet_username
         )
 
 

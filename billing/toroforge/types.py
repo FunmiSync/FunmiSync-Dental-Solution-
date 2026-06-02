@@ -6,4 +6,3 @@ class ToroForgeProvisionWalletResult:
     wallet_id: UUID
     external_wallet_address: str 
     external_wallet_username: str
-    generated_password: str 
