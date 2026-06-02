@@ -505,6 +505,7 @@ class ToroForgeWalletService:
              wallet_id=wallet.id,
              external_wallet_address= external_wallet_address, # type: ignore
              external_wallet_username= external_wallet_username, # type: ignore
+             generated_password=generated_password,
         )
 
 
@@ -590,7 +591,7 @@ class ToroForgeWalletService:
             raise ToroForgeValidationError(
                 "Wallet creation request is already in progress"
             )
-        if request_row.status == WalletCreationRequest.FAILED:
+        if request_row.status == WalletCreationRequestStatus.FAILED:
             raise ToroForgeWalletCreationError(
                 request_row.failure_reason
                 or "Wallet creation previously failed for this idempotency key"
@@ -601,7 +602,7 @@ class ToroForgeWalletService:
                 "Successful wallet creation request has no wallet reference"
             )
         
-        wallet = self.db.query(Wallet).filter(Wallet).filter(Wallet.id == request_row.wallet_id).first()
+        wallet = self.db.query(Wallet).filter(Wallet.id == request_row.wallet_id).first()
         if  not wallet:
             raise ToroForgeWalletCreationError(
                 "Wallet referenced by wallet creation request was not found"

@@ -190,7 +190,8 @@ async def create_standalone_clinic_wallet(
         "scope_type": "clinic",
         "clinic_id": clinic.id,
         "external_wallet_address": result.external_wallet_address,
-        "external_wallet_username": result.external_wallet_username
+        "external_wallet_username": result.external_wallet_username,
+        "generated_password": result.generated_password,
     }
 
 
@@ -251,7 +252,8 @@ async def create_dso_clinic_wallet(
         "clinic_id": clinic.id,
         "dso_id": dso_id,
         "external_wallet_address": result.external_wallet_address,
-        "external_wallet_username": result.external_wallet_username
+        "external_wallet_username": result.external_wallet_username,
+        "generated_password": result.generated_password,
     }
 
 
@@ -304,4 +306,5 @@ async def create_dso_treasury_wallet(
         "dso_id": dso_id,
         "external_wallet_address": result.external_wallet_address,
         "external_wallet_username": result.external_wallet_username,
+        "generated_password": result.generated_password,
     }

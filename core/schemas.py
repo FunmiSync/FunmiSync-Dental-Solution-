@@ -368,7 +368,7 @@ class toroforge_wallet_create_response(BaseModel):
     dso_id: Optional[UUID] = None
     external_wallet_address: str
     external_wallet_username: str
-    generated_password: str
+    generated_password: Optional[str] = None
 
 
 class toroforge_kyc_submit_request(BaseModel):
