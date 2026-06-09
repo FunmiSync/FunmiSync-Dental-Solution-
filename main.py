@@ -14,6 +14,7 @@ from api.routers import team_members
 from api.routers.synclog import sync_log_dso
 from api.routers.synclog import sync_log_clinic
 from api.routers.toroforge_endpoint import toroforge_kyc
+from api.routers.toroforge_endpoint import toroforge_wallet_transfer
 from api.routers.toroforge_endpoint import toroforge_wallet_creation
 from api.routers.toroforge_endpoint import toroforge_billing_wallet_read
 from api.routers.toroforge_endpoint import toroforge_funding
@@ -54,6 +55,7 @@ app.include_router(toroforge_kyc.router)
 app.include_router(toroforge_wallet_creation.router)
 app.include_router(toroforge_billing_wallet_read.router)
 app.include_router(toroforge_funding.router)
+app.include_router(toroforge_wallet_transfer.router)
 
 
 @app.on_event("startup")

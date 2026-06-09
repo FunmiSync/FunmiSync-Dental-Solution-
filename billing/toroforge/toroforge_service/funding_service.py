@@ -22,7 +22,6 @@ from billing.toroforge.money import (
     coerce_amount_decimal,
     to_amount_minor,
     to_provider_amount_string,
-    balance_amount_to_minor,
     extract_address_balance_minor
 )
 

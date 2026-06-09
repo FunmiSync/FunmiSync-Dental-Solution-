@@ -529,6 +529,7 @@ class toroforge_dso_billing_out(BaseModel):
     active_subscription: Optional[toroforge_billing_subscription_out] = None
 
 
+
 class toroforge_clinic_billing_out(BaseModel):
     has_wallet:bool
     next_action: Optional[Literal["create_wallet"]] = None
@@ -555,10 +556,27 @@ class toroforge_clinic_billing_out(BaseModel):
 
 
 
+##### wallet transfers
+class toroforge_wallet_transfer_request(BaseModel):
+    amount: str = Field(min_length=1, max_length=32)
+    currency: str = Field(min_length=1, max_length=16)
 
 
 
-
+class toroforge_wallet_transfer_response(BaseModel):
+    wallet_transfer_id: UUID | str
+    sender_ledger_entry_id: Optional[UUID | str] = None
+    receiver_ledger_entry_id: Optional[UUID | str] = None
+    from_wallet_id: Optional[UUID | str] = None
+    to_wallet_id: Optional[UUID | str] = None
+    status: str
+    amount_minor: int
+    currency: str
+    external_transaction_id: Optional[str] = None
+    sender_new_cached_balance_minor: Optional[int] = None
+    receiver_new_cached_balance_minor: Optional[int] = None
+    provider_response: Optional[Dict[str, Any]] = None
+    reused: bool = False
 
 
 

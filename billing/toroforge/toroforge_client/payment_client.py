@@ -22,7 +22,7 @@ class ToroForgePaymentClient:
         success_url: str,
         cancel_url: str,
         payment_type: str,
-        fee_type: str = "1",
+        fee_type: str = "0",
         passthrough: str = "0",
         commission_rate: str = "0",
         exchange: str = "0",
