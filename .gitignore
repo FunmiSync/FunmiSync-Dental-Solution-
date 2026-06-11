@@ -1,6 +1,15 @@
 .env
+.env.*
+!.env.example
+
 .venv/
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+
 .vscode/
-__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+bounty-template-work/
