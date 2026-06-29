@@ -229,4 +229,5 @@ async def get_wallet_kyc_status(
         "wallet_id": wallet_id,
         "verified": response["verified"],
         "provider": response.get("provider"),
+        
     }

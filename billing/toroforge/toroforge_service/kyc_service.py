@@ -47,7 +47,7 @@ class ToroForgeKYCService:
         return response
     
 
-    async def check_wallet_kyc_status(self, *, wallet_id: UUID) -> dict[str, Any]:
+    async def check_wallet_kyc_status(self, *, wallet_id: UUID) ->tuple[dict[str, Any], bool]:
         wallet = (
             self.db.query(Wallet)
             .options(
@@ -70,6 +70,7 @@ class ToroForgeKYCService:
         )
 
         wallet.kyc_verified = status["verified"]
+        kyc = wallet.kyc_verified
 
         try:
             self.db.add(wallet)
@@ -79,7 +80,7 @@ class ToroForgeKYCService:
             self.db.rollback()
             raise
 
-        return status
+        return status, kyc 
     
     
 
