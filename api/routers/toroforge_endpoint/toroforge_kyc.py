@@ -218,7 +218,7 @@ async def get_wallet_kyc_status(
     logger.info("ToroForge wallet KYC status requested", extra=log_ctx)
 
     try:
-        response = await kyc_service.check_wallet_kyc_status(wallet_id=wallet_id)
+        status_response, kyc_verified = await kyc_service.check_wallet_kyc_status(wallet_id=wallet_id)
     except Exception as exc:
         logger.exception("ToroForge wallet KYC status failed", extra=log_ctx)
         raise_kyc_http_error(exc)
@@ -227,7 +227,7 @@ async def get_wallet_kyc_status(
 
     return {
         "wallet_id": wallet_id,
-        "verified": response["verified"],
-        "provider": response.get("provider"),
+        "verified": kyc_verified,
+        "provider": status_response.get("provider"),
         
     }
