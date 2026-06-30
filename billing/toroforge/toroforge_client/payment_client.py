@@ -16,7 +16,7 @@ class ToroForgePaymentClient:
         admin: str,
         adminpwd: str,
         currency: str,
-        token: str,
+        token: str | None,
         address: str,
         amount: str,
         success_url: str,
@@ -53,6 +53,9 @@ class ToroForgePaymentClient:
             {"name": "commissionrate", "value": commission_rate},
             {"name": "exchange", "value": exchange},
         ]
+
+        if token:
+            params.insert(1, {"name": "token", "value": token})
 
         optional_params = [
             ("payername", payer_name),

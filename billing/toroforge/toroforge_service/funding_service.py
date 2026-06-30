@@ -66,7 +66,7 @@ class ToroForgeFundingService:
             raise ToroForgeValidationError("request_id is required")
 
         normalized_currency = currency.strip().upper()
-        normalized_token = (token or normalized_currency).strip().upper()
+        normalized_token = token.strip().upper() if token and token.strip() else None
         normalized_payment_type = payment_type.strip().lower()
         amount_decimal = coerce_amount_decimal(amount)
         amount_minor = to_amount_minor(
