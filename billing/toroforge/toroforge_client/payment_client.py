@@ -71,10 +71,11 @@ class ToroForgePaymentClient:
 
         data = await self.client.call_write(
             method="POST",
-            path="/api/payment/toro/",
+            path="/api/payment/",
             op="paymentinitialize",
             params=params,
             headers=headers,
+            base_url=self.client.config.connectw_url,
         )
 
         if not isinstance(data, dict):
@@ -117,10 +118,11 @@ class ToroForgePaymentClient:
 
         data = await self.client.call_read(
             method="POST",
-            path="/api/payment/toro/",
+            path="/api/payment/",
             op="getfiattransactions_txid",
             params=params,
             headers=headers,
+            base_url=self.client.config.connectw_url,
         )
 
         if not isinstance(data, dict):
