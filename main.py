@@ -26,7 +26,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
-origins = ["https://fumisync-project.vercel.app"]
+origins = ["https://fumisync.com"]
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
