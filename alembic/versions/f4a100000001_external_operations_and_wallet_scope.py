@@ -32,6 +32,7 @@ def upgrade():
         sa.Column("resource_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("action", sa.String(), nullable=False),
         sa.Column("request_hash", sa.String(), nullable=False),
+        sa.Column("request_encrypted", sa.Text(), nullable=True),
         sa.Column("state", sa.String(), nullable=False),
         sa.Column("secrets_encrypted", sa.Text(), nullable=True),
         sa.Column("result_encrypted", sa.Text(), nullable=True),

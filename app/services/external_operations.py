@@ -13,6 +13,11 @@ class ReconciliationRequired(ToroForgeError):
     pass
 
 
+def stored_request(operation: ExternalOperation) -> dict | None:
+    """The request sent to the provider; None once applied, or for calls made before it was kept."""
+    return decode_json_secret(operation.request_encrypted) if operation.request_encrypted else None
+
+
 def request_fingerprint(request: dict) -> str:
     return hash_lookup(json.dumps(request, sort_keys=True, separators=(",", ":"), default=str))
 
@@ -43,6 +48,7 @@ class ExternalOperations:
             raise ReconciliationRequired("An external operation for this resource requires reconciliation")
         operation = ExternalOperation(id=uuid4(), operation_key=key, resource_id=resource_id,
                                       action=action, request_hash=fingerprint, state="in_flight",
+                                      request_encrypted=encrypt_json_secret(json.loads(json.dumps(request, default=str))),
                                       secrets_encrypted=encrypt_json_secret(secrets))
         self.db.add(operation)
         record_audit(self.db,entity_type="external_operation",entity_id=operation.id,action="intent",
@@ -84,6 +90,7 @@ class ExternalOperations:
         if not operation or operation.state not in {"succeeded", "applied"}:
             raise ReconciliationRequired("External operation has no confirmed result")
         operation.state = "applied"
+        operation.request_encrypted = None  # nothing left to look up; do not keep patient details
         record_audit(self.db,entity_type="external_operation",entity_id=operation.id,action="local_applied")
 
     async def confirm_from_verified_read(self, key, result):

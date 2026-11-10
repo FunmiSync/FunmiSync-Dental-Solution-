@@ -26,8 +26,6 @@ class Settings(BaseSettings):
     toroforge_deployer_url: str = Field(...)
     toroforge_admin: str = Field(...)
     toroforge_adminpwd: str = Field(...)
-    toroforge_settlement_field: str | None = None
-    toroforge_settlement_success_values: list[str] = []
     cors_origins: list[str] = ['https://www.fumisync.com']
     @field_validator("cors_origins")
     @classmethod

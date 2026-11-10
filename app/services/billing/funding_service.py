@@ -401,12 +401,23 @@ class ToroForgeFundingService:
         if wallet.currency.strip().upper() != payment.currency.strip().upper():
             raise ToroForgeValidationError("Wallet currency does not match payment currency")
 
+        # Second, independent check: the deposit must already be in the wallet on
+        # Toronet, not only logged by the payment gateway. Compared under row lock below.
+        onchain_balance_minor = None
+        if payment.status != PaymentTransactionStatus.SUCCEEDED:
+            balance_response = await self.payment_client.get_address_balance(address=external_wallet_address)
+            onchain_balance_minor = extract_address_balance_minor(
+                balance_response=balance_response,
+                currency=payment.currency,
+            )
+
         posted = await self.record_verified_funding_success(
                 payment_transaction_id=payment_transaction_id,
                 provider_response={
                     **provider_response,
                     "matched_record": matched_record,
                 },
+                onchain_balance_minor=onchain_balance_minor,
             )
 
         return {
@@ -477,6 +488,7 @@ class ToroForgeFundingService:
             *,
             payment_transaction_id: UUID,
             provider_response: dict[str, Any],
+            onchain_balance_minor: int | None,
             succeeded_at: datetime | None = None
     ) -> dict[str, Any]:
         
@@ -547,6 +559,10 @@ class ToroForgeFundingService:
             new_balance_minor = wallet.cached_balance_minor + payment.amount_minor
             if new_balance_minor > MAX_MINOR:
                 raise ToroForgeValidationError("Wallet balance exceeds supported limits")
+            # Compared against the locked wallet row, so two deposits verified at the same
+            # moment cannot both pass against the same on-chain balance.
+            if onchain_balance_minor is None or onchain_balance_minor < new_balance_minor:
+                raise ToroForgeValidationError("ToroForge wallet balance does not show this deposit yet")
 
             payment.status = PaymentTransactionStatus.SUCCEEDED
             payment.failure_reason = None

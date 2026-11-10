@@ -63,7 +63,27 @@ class ToroForgeWalletTransferClient:
             )
 
         return response
-        
 
-    
+    async def get_dollar_transactions(self, *, address: str, count: int) -> list[dict[str, Any]]:
+        """Newest-first dollar transactions touching this address, read from the Toronet query API.
 
+        Each record carries EV_Hash, EV_From, EV_To, EV_Value (in dollars) and EV_Time (ISO, UTC).
+        """
+        normalized_address = address.strip()
+        if not normalized_address:
+            raise ToroForgeValidationError("address is required")
+
+        response = await self.client.call_read(
+            method="GET",
+            path="query",
+            op="getaddrtransactions_dollar",
+            params=[
+                {"name": "addr", "value": normalized_address},
+                {"name": "count", "value": count},
+            ],
+        )
+
+        records = response.get("data") if isinstance(response, dict) else None
+        if not isinstance(response, dict) or response.get("result") is not True or not isinstance(records or [], list):
+            raise ToroForgeValidationError("ToroForge transaction history query failed")
+        return [record for record in records or [] if isinstance(record, dict)]

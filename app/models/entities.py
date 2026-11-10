@@ -492,6 +492,9 @@ class ExternalOperation(Base, Autoid):
     resource_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     action: Mapped[str] = mapped_column(String, nullable=False)
     request_hash: Mapped[str] = mapped_column(String, nullable=False)
+    # What was asked of the provider, kept until the result is applied so an automatic
+    # check can look the action up again (e.g. search OpenDental for the appointment).
+    request_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     state: Mapped[str] = mapped_column(String, nullable=False, default="in_flight")
     secrets_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     result_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

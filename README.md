@@ -123,6 +123,45 @@ Two async rules to remember:
    rolls back when a provider call fails, so code that keeps using a row afterwards calls
    `await reload_expired(db, row)` first, or captures values such as ids beforehand.
 
+### Resolving stuck provider actions
+
+If ToroForge or OpenDental doesn't answer, the app parks that action as "outcome unknown"
+and refuses to repeat it, so a retry can never pay or book twice. Check the provider, then
+record what really happened (every resolution goes to the audit log):
+
+```bash
+.venv/bin/python -m tools.stuck_operations list
+.venv/bin/python -m tools.stuck_operations resolve <id> --happened --set TX_ID=<from ToroForge> --by "<your name>"
+.venv/bin/python -m tools.stuck_operations resolve <id> --not-done --by "<your name>" --note "<what you checked>"
+```
+
+`--happened` reuses the provider's result (a confirmed transfer posts its balances immediately);
+`--not-done` closes the action so the next attempt calls the provider again. Actions that started
+less than 10 minutes ago may still be running and need `--force`.
+
+Most cases resolve themselves. `auto` asks the providers (read-only) and records the answer
+through the same `resolve`, with `automatic check` as the resolver in the audit log:
+
+```bash
+.venv/bin/python -m tools.stuck_operations auto --dry-run   # report only
+.venv/bin/python -m tools.stuck_operations auto             # run as a Render Cron Job every 15 minutes
+```
+
+| Action | Counts as done when | Counts as not done when (after 1 hour) |
+| --- | --- | --- |
+| DSO→clinic transfer | Toronet shows exactly one unused transfer of that exact amount from the treasury to the clinic since it started | Toronet shows no transfer from the treasury to the clinic since it started |
+| Top-up start | ToroForge has exactly one unlinked payment of that amount for the wallet | ToroForge has none |
+| Wallet key creation | (never; the address was lost) | always: no one can have paid into an address no one received |
+| Wallet name (TNS) | the name points to this wallet | the name is not registered |
+| Wallet password change | ToroForge accepts the new password (it is then saved on the wallet) | (never; a person decides) |
+| OpenDental patient | the patient row already has a PatNum, or exactly one OpenDental patient has the same name and birth date | OpenDental has no patient with that last name and birth date |
+| OpenDental appointment | exactly one appointment for that patient at that time in that operatory | none |
+
+Anything else is left for a person: several matches, a near match (for example a different
+amount), a provider error, comm logs and popups, and OpenDental actions started before request
+details were kept. Under an hour, "nothing found yet" waits for the next run. Requests are kept
+encrypted in `external_operations.request_encrypted` until the result is applied.
+
 `tests/test_mvc_architecture.py` fails if an `async def` never awaits or a session call
 (`commit`, `execute`, ...) is not awaited.
 
@@ -662,6 +701,6 @@ The master learning guide is [FumiSync_Junior_Developer_Guide.docx](docs/FumiSyn
 
 **Migration preparation is not deployment.** These workflows now require revision `f4a100000001`. The migration and `tools/backfill_private_data.py` have been prepared but have not been executed against a database. Review the guide's rollout steps and obtain approval for the actual target before running them. Preserve original encryption/HMAC keys.
 
-`GET /health/ready` checks the expected schema plus PostgreSQL/Redis. Configure `CORS_ORIGINS` as explicit JSON origins. Treasury transfer posting remains blocked until `TOROFORGE_SETTLEMENT_FIELD` and `TOROFORGE_SETTLEMENT_SUCCESS_VALUES` are verified against merchant/provider evidence; test fixture fields are not production configuration. Existing API shapes remain checked, while validation, name-prefix searching and uncertain-operation behavior are intentionally stricter.
+`GET /health/ready` checks the expected schema plus PostgreSQL/Redis. Configure `CORS_ORIGINS` as explicit JSON origins. Existing API shapes remain checked, while validation, name-prefix searching and uncertain-operation behavior are intentionally stricter.
 
-Deposit verification uses a successful transaction lookup (`result` must be boolean `true`) plus exact transaction ID, destination, currency and amount matching. It does not require the optional settlement-status configuration. This follows the provider behavior clarified by the project owner; live integration remains untested.
+Deposit verification makes two independent ToroForge checks: the payment lookup by transaction ID (`getfiattransactions_txid`; `result` must be boolean `true` with an exact transaction ID, destination, currency and amount match), and the wallet's real Toronet balance (`getaddrbalance`), which must already include the deposit. The balance is compared under a row lock, so one arrival cannot credit two deposits. DSO-to-clinic transfers follow the same ToroForge contract: a reply with `result: true` and a `TX_ID` means the money moved, so balances post immediately. Both rules follow the provider behavior confirmed by the project owner; live integration remains untested.

@@ -144,6 +144,38 @@ class ToroForgePaymentClient:
         return data
     
 
+    async def get_payments_for_address(
+        self,
+        *,
+        admin: str,
+        adminpwd: str,
+        address: str,
+        start_date: str,
+        end_date: str,
+    ) -> list[dict[str, Any]]:
+        """Fiat payments made to this wallet address between two dates (YYYY-MM-DD, inclusive)."""
+        normalized_address = address.strip()
+        if not normalized_address:
+            raise ToroForgeValidationError("address is required")
+
+        data = await self.client.call_read(
+            method="POST",
+            path="/api/payment/toro/",
+            op="getfiattransactions_address_range",
+            params=[
+                {"name": "addr", "value": normalized_address},
+                {"name": "startdate", "value": start_date},
+                {"name": "enddate", "value": end_date},
+            ],
+            headers={"admin": admin, "adminpwd": adminpwd},
+            base_url=self.client.config.payment_url,
+        )
+
+        records = data.get("data") if isinstance(data, dict) else None
+        if not isinstance(data, dict) or data.get("result") is not True or not isinstance(records or [], list):
+            raise ToroForgeValidationError("ToroForge getfiattransactions_address_range query failed")
+        return [record for record in records or [] if isinstance(record, dict)]
+
     async def get_address_balance(
     self,
     *,

@@ -33,7 +33,7 @@
     ]
   },
   "external_operations": {
-    "ddl": "\nCREATE TABLE external_operations (\n\toperation_key VARCHAR NOT NULL, \n\tresource_id UUID NOT NULL, \n\taction VARCHAR NOT NULL, \n\trequest_hash VARCHAR NOT NULL, \n\tstate VARCHAR NOT NULL, \n\tsecrets_encrypted TEXT, \n\tresult_encrypted TEXT, \n\tfailure_code VARCHAR, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tid UUID DEFAULT gen_random_uuid() NOT NULL, \n\tPRIMARY KEY (id), \n\tUNIQUE (operation_key)\n)\n\n",
+    "ddl": "\nCREATE TABLE external_operations (\n\toperation_key VARCHAR NOT NULL, \n\tresource_id UUID NOT NULL, \n\taction VARCHAR NOT NULL, \n\trequest_hash VARCHAR NOT NULL, \n\trequest_encrypted TEXT, \n\tstate VARCHAR NOT NULL, \n\tsecrets_encrypted TEXT, \n\tresult_encrypted TEXT, \n\tfailure_code VARCHAR, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tid UUID DEFAULT gen_random_uuid() NOT NULL, \n\tPRIMARY KEY (id), \n\tUNIQUE (operation_key)\n)\n\n",
     "indexes": [
       "CREATE INDEX ix_external_operations_resource_id ON external_operations (resource_id)",
       "CREATE UNIQUE INDEX ix_external_operations_id ON external_operations (id)",

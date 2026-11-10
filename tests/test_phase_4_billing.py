@@ -139,17 +139,13 @@ class DurableTransferTests(unittest.IsolatedAsyncioTestCase):
         self.receiver = Wallet(id=uuid4(),clinic_id=self.clinic_id,dso_id=self.dso_id,wallet_type=WalletType.CLINIC,
             status=WalletStatus.ACTIVE,currency="USD",cached_balance_minor=0,external_wallet_address="0xreceiver")
         self.db.add_all([self.sender,self.receiver]); await self.db.commit()
-        self.client = SimpleNamespace(make_inter_wallet_transfer=AsyncMock(return_value={"result":True,"data":[{"TX_ID":"TRANSFER1", "test_status":"settled"}]}))
-        from app.config import settings
-        self.settlement = patch.multiple(settings, toroforge_settlement_field="test_status",
-                                        toroforge_settlement_success_values=["settled"])
-        self.settlement.start()
+        self.client = SimpleNamespace(make_inter_wallet_transfer=AsyncMock(return_value={"result":True,"data":[{"TX_ID":"TRANSFER1"}]}))
         from app.services.billing.wallet_transfer_service import ToroForgeWalletTransferService
         self.service = ToroForgeWalletTransferService(self.db,self.client)
         self.cache = patch("app.services.billing.wallet_transfer_service.invalidate_billing_scope");self.cache.start()
 
     async def asyncTearDown(self):
-        self.settlement.stop();self.cache.stop();await close_local_session(self.db,self.engine)
+        self.cache.stop();await close_local_session(self.db,self.engine)
 
     async def send(self,key="one",amount="25"):
         return await self.service.transfer_from_dso_to_clinic(dso_id=self.dso_id,clinic_id=self.clinic_id,amount=amount,
@@ -181,13 +177,23 @@ class DurableTransferTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["status"], "completed")
         self.client.make_inter_wallet_transfer.assert_awaited_once()
 
-    async def test_acknowledgement_without_settlement_does_not_post_balances(self):
-        self.client.make_inter_wallet_transfer.return_value = {"result":True,"data":[{"TX_ID":"TRANSFER1"}]}
+    async def test_result_true_with_transaction_id_posts_without_extra_status_fields(self):
+        # ToroForge's contract: result=true plus a TX_ID means the money moved.
+        result = await self.send()
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["external_transaction_id"], "TRANSFER1")
+        await self.db.refresh(self.sender); await self.db.refresh(self.receiver)
+        self.assertEqual((self.sender.cached_balance_minor, self.receiver.cached_balance_minor), (7500, 2500))
+
+    async def test_acknowledgement_without_transaction_id_does_not_post_balances(self):
+        self.client.make_inter_wallet_transfer.return_value = {"result":True,"data":[]}
         with self.assertRaises(ReconciliationRequired): await self.send()
         await self.db.refresh(self.sender); await self.db.refresh(self.receiver)
         self.assertEqual(self.sender.cached_balance_minor,10000)
         self.assertEqual(self.receiver.cached_balance_minor,0)
-        with self.assertRaises(ReconciliationRequired): await self.send()
+        # The outcome is unknown: the same key reports pending, any other key is blocked.
+        self.assertEqual((await self.send())["status"], "pending")
+        with self.assertRaises(ReconciliationRequired): await self.send(key="different")
         self.client.make_inter_wallet_transfer.assert_awaited_once()
 
 
@@ -249,7 +255,10 @@ class FundingPersistenceTests(unittest.IsolatedAsyncioTestCase):
         self.wallet=Wallet(id=uuid4(),clinic_id=uuid4(),wallet_type=WalletType.CLINIC,status=WalletStatus.ACTIVE,
             external_wallet_address="0xabc",kyc_verified=True,currency="USD",cached_balance_minor=0)
         self.db.add(self.wallet);await self.db.commit()
-        self.client=SimpleNamespace(initialize_payment=AsyncMock(return_value={"result":True,"data":[{"TX_ID":"TX1"}]}))
+        self.wallet_id=self.wallet.id
+        self.client=SimpleNamespace(initialize_payment=AsyncMock(return_value={"result":True,"data":[{"TX_ID":"TX1"}]}),
+            # Toronet's real wallet balance (getaddrbalance); 10 USD has arrived.
+            get_address_balance=AsyncMock(return_value={"result":True,"bal_dollar":"10"}))
         self.client.client=SimpleNamespace(config=SimpleNamespace(admin="test",adminpwd="test"))
         self.service=ToroForgeFundingService(self.db,self.client)
         self.cache=patch("app.services.billing.funding_service.invalidate_billing_scope");self.cache.start()
@@ -300,9 +309,59 @@ class FundingPersistenceTests(unittest.IsolatedAsyncioTestCase):
                 await self.service.verify_wallet_deposit(wallet_id=wallet_id,payment_transaction_id=payment_id,txid="TX1")
             with self.assertRaises(ToroForgeValidationError):
                 await self.service.record_verified_funding_success(payment_transaction_id=payment_id,
-                    provider_response={"result":flag,"matched_record":record})
+                    provider_response={"result":flag,"matched_record":record},onchain_balance_minor=1000)
             await self.db.refresh(self.wallet)
             self.assertEqual(self.wallet.cached_balance_minor,0)
+
+
+    def lookup_finds(self,*payments):
+        # getfiattransactions_txid: ToroForge returns the record for whichever txid is asked.
+        records={p["txid"]:{"TX_ID":p["txid"],"TX_Currency":"USD","TX_Address":"0xabc","TX_Amount":p["amount"]} for p in payments}
+        async def lookup(*,admin,adminpwd,txid):
+            return {"result":True,"data":[records[txid]]}
+        self.client.get_payment_by_txid=AsyncMock(side_effect=lookup)
+    async def verify(self,payment_id,txid):
+        # The wallet id comes from the URL in the API; a refused attempt's rollback expires self.wallet.
+        return await self.service.verify_wallet_deposit(wallet_id=self.wallet_id,payment_transaction_id=payment_id,txid=txid)
+    async def test_a_deposit_is_credited_only_once_it_shows_in_the_toronet_balance(self):
+        from app.models.entities import PaymentTransaction
+        await self.initialize()
+        payment_id=(await self.db.scalars(select(PaymentTransaction))).one().id
+        self.lookup_finds({"txid":"TX1","amount":"10"})
+        self.client.get_address_balance.return_value={"result":True,"bal_dollar":"0"}  # gateway says paid, money not there yet
+        with self.assertRaisesRegex(ToroForgeValidationError,"does not show this deposit yet"):
+            await self.verify(payment_id,"TX1")
+        await self.db.refresh(self.wallet)
+        self.assertEqual(self.wallet.cached_balance_minor,0)
+        self.client.get_address_balance.return_value={"result":True,"bal_dollar":"10"}  # now it has arrived
+        self.assertEqual((await self.verify(payment_id,"TX1"))["status"],"succeeded")
+        await self.db.refresh(self.wallet)
+        self.assertEqual(self.wallet.cached_balance_minor,1000)
+    async def test_two_deposits_cannot_both_be_credited_from_one_arrival(self):
+        from app.models.entities import PaymentTransaction
+        await self.initialize(key="one")
+        self.client.initialize_payment.return_value={"result":True,"data":[{"TX_ID":"TX2"}]}
+        await self.initialize(key="two")
+        payments={p.external_payment_id:p.id for p in (await self.db.scalars(select(PaymentTransaction))).all()}
+        self.lookup_finds({"txid":"TX1","amount":"10"},{"txid":"TX2","amount":"10"})
+        # Only one $10 has reached the wallet so far.
+        self.assertEqual((await self.verify(payments["TX1"],"TX1"))["status"],"succeeded")
+        with self.assertRaisesRegex(ToroForgeValidationError,"does not show this deposit yet"):
+            await self.verify(payments["TX2"],"TX2")
+        self.client.get_address_balance.return_value={"result":True,"bal_dollar":"20"}  # the second one arrives
+        self.assertEqual((await self.verify(payments["TX2"],"TX2"))["status"],"succeeded")
+        await self.db.refresh(self.wallet)
+        self.assertEqual(self.wallet.cached_balance_minor,2000)
+    async def test_crediting_directly_without_the_toronet_balance_is_refused(self):
+        from app.models.entities import PaymentTransaction
+        await self.initialize()
+        payment_id=(await self.db.scalars(select(PaymentTransaction))).one().id
+        record={"TX_ID":"TX1","TX_Currency":"USD","TX_Address":"0xabc","TX_Amount":"10"}
+        with self.assertRaisesRegex(ToroForgeValidationError,"does not show this deposit yet"):
+            await self.service.record_verified_funding_success(payment_transaction_id=payment_id,
+                provider_response={"result":True,"matched_record":record},onchain_balance_minor=None)
+        await self.db.refresh(self.wallet)
+        self.assertEqual(self.wallet.cached_balance_minor,0)
 
 
 class DatabaseInvariantTests(unittest.IsolatedAsyncioTestCase):

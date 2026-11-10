@@ -270,13 +270,11 @@ class ToroForgeWalletTransferService:
             operation = await self.operations.get(operation_key)
             if not operation or operation.state != "succeeded":
                 raise ReconciliationRequired("Transfer has no durably confirmed provider result")
+            # ToroForge's completion contract for transfers, as for deposits: result=true with a
+            # TX_ID means the money moved (confirmed by the project owner, 10 November 2026).
             external_id = self.extract_transfer_txid(response)
             if not external_id or response.get("result") is not True:
                 raise ReconciliationRequired("Transfer confirmation requires reconciliation")
-            from app.services.billing.settlement import is_settled
-            records = response.get("data")
-            if not records or not is_settled(records[0]):
-                raise ReconciliationRequired("Transfer acknowledgement lacks verified settlement status")
             wallets = (await self.db.scalars(select(Wallet).filter(Wallet.id.in_([transfer.from_wallet_id, transfer.to_wallet_id])).order_by(Wallet.id).with_for_update().execution_options(populate_existing=True))).all()
             by_id = {wallet.id: wallet for wallet in wallets}
             sender, receiver = by_id[transfer.from_wallet_id], by_id[transfer.to_wallet_id]
