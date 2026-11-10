@@ -1,0 +1,43 @@
+{
+  "wallets": {
+    "ddl": "\nCREATE TABLE wallets (\n\tdso_id UUID, \n\tclinic_id UUID, \n\tparent_wallet_id UUID, \n\twallet_type wallet_type_enum NOT NULL, \n\tstatus wallet_status_enum DEFAULT 'PENDING' NOT NULL, \n\texternal_wallet_username VARCHAR, \n\texternal_wallet_password_encrypted VARCHAR, \n\texternal_wallet_address VARCHAR, \n\tcurrency VARCHAR DEFAULT 'USD' NOT NULL, \n\tcached_balance_minor BIGINT DEFAULT '0' NOT NULL, \n\tauto_debit_enabled BOOLEAN DEFAULT 'false' NOT NULL, \n\tlast_balance_sync_at TIMESTAMP WITH TIME ZONE, \n\tkyc_verified BOOLEAN DEFAULT 'false' NOT NULL, \n\tfailure_reason VARCHAR, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tid UUID DEFAULT gen_random_uuid() NOT NULL, \n\tPRIMARY KEY (id), \n\tCONSTRAINT uq_wallet_clinic_type UNIQUE (clinic_id, wallet_type), \n\tFOREIGN KEY(dso_id) REFERENCES \"Dsos\" (id) ON DELETE CASCADE, \n\tFOREIGN KEY(clinic_id) REFERENCES registered_clinics (id) ON DELETE CASCADE, \n\tFOREIGN KEY(parent_wallet_id) REFERENCES wallets (id) ON DELETE SET NULL\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_wallets_auto_debit_enabled ON wallets (auto_debit_enabled)",
+      "CREATE INDEX ix_wallets_clinic_id ON wallets (clinic_id)",
+      "CREATE INDEX ix_wallets_dso_id ON wallets (dso_id)",
+      "CREATE INDEX ix_wallets_external_wallet_address ON wallets (external_wallet_address)",
+      "CREATE INDEX ix_wallets_external_wallet_username ON wallets (external_wallet_username)",
+      "CREATE INDEX ix_wallets_kyc_verified ON wallets (kyc_verified)",
+      "CREATE INDEX ix_wallets_parent_wallet_id ON wallets (parent_wallet_id)",
+      "CREATE INDEX ix_wallets_status ON wallets (status)",
+      "CREATE INDEX ix_wallets_wallet_type ON wallets (wallet_type)",
+      "CREATE INDEX ix_walletss_dso_clinic_parent ON wallets (dso_id, clinic_id, parent_wallet_id)",
+      "CREATE UNIQUE INDEX ix_wallets_id ON wallets (id)",
+      "CREATE UNIQUE INDEX uq_wallet_dso_treasury ON wallets (dso_id) WHERE wallet_type = 'DSO_TREASURY'"
+    ]
+  },
+  "role_assignments": {
+    "ddl": "\nCREATE TABLE role_assignments (\n\tuser_id UUID NOT NULL, \n\tscope_type scope_type_enum NOT NULL, \n\trole role_type_enum NOT NULL, \n\tdso_id UUID, \n\tclinic_id UUID, \n\tis_active BOOLEAN DEFAULT 'true' NOT NULL, \n\tcreated_by UUID, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tid UUID DEFAULT gen_random_uuid() NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE, \n\tFOREIGN KEY(dso_id) REFERENCES \"Dsos\" (id) ON DELETE CASCADE, \n\tFOREIGN KEY(clinic_id) REFERENCES registered_clinics (id) ON DELETE CASCADE, \n\tFOREIGN KEY(created_by) REFERENCES users (id) ON DELETE SET NULL\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_role_assignments_user_scope_clinic_active ON role_assignments (user_id, scope_type, clinic_id, is_active)",
+      "CREATE INDEX ix_role_assignments_user_scope_dso_active ON role_assignments (user_id, scope_type, dso_id, is_active)",
+      "CREATE UNIQUE INDEX ix_role_assignments_id ON role_assignments (id)",
+      "CREATE UNIQUE INDEX uq_active_clinic_membership ON role_assignments (user_id, clinic_id) WHERE scope_type = 'CLINIC' AND is_active",
+      "CREATE UNIQUE INDEX uq_active_dso_membership ON role_assignments (user_id, dso_id) WHERE scope_type = 'DSO' AND is_active"
+    ]
+  },
+  "audit_logs": {
+    "ddl": "\nCREATE TABLE audit_logs (\n\tclinic_id UUID, \n\tentity_type VARCHAR NOT NULL, \n\tentity_id VARCHAR, \n\taction VARCHAR NOT NULL, \n\tstatus VARCHAR NOT NULL, \n\tsource VARCHAR NOT NULL, \n\tdetails JSON, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tid UUID DEFAULT gen_random_uuid() NOT NULL, \n\tPRIMARY KEY (id)\n)\n\n",
+    "indexes": [
+      "CREATE UNIQUE INDEX ix_audit_logs_id ON audit_logs (id)"
+    ]
+  },
+  "external_operations": {
+    "ddl": "\nCREATE TABLE external_operations (\n\toperation_key VARCHAR NOT NULL, \n\tresource_id UUID NOT NULL, \n\taction VARCHAR NOT NULL, \n\trequest_hash VARCHAR NOT NULL, \n\tstate VARCHAR NOT NULL, \n\tsecrets_encrypted TEXT, \n\tresult_encrypted TEXT, \n\tfailure_code VARCHAR, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tid UUID DEFAULT gen_random_uuid() NOT NULL, \n\tPRIMARY KEY (id), \n\tUNIQUE (operation_key)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_external_operations_resource_id ON external_operations (resource_id)",
+      "CREATE UNIQUE INDEX ix_external_operations_id ON external_operations (id)",
+      "CREATE UNIQUE INDEX uq_external_operation_active_resource ON external_operations (resource_id, action) WHERE state IN ('in_flight', 'uncertain', 'succeeded')"
+    ]
+  }
+}

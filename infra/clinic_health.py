@@ -1,35 +1,9 @@
-from datetime import datetime, timezone
-from core.models import RegisteredClinics
+"""Compatibility alias for app.services.clinic_health.
 
+Edit the canonical module under app/; this path stays for existing imports/jobs.
+Aliasing the module keeps class identities and patched globals shared.
+"""
+import sys
+from app.services import clinic_health as _implementation
 
-
-def now()-> datetime:
-    return datetime.now(timezone.utc)
-
-def mark_webhook_auth_failed(clinic: RegisteredClinics)-> None:
-    clinic.last_webhook_auth_failed_at = now()
-    clinic.webhook_auth_failure_count = int(clinic.webhook_auth_failure_count or 0) + 1 
-
-def reset_webhook_failure_after_success(clinic:RegisteredClinics):
-    clinic.webhook_auth_failure_count = 0
-    clinic.last_webhook_auth_failed_at = None
-
-def mark_od_auth_failed(clinic: RegisteredClinics, *, reason: str)-> None:
-    clinic.od_health_status ="auth_failed"
-    clinic.od_health_reason = reason
-    clinic.od_health_changed_at = now()
-
-def mark_od_health_ok(clinic:RegisteredClinics)-> None:
-    clinic.od_health_status = "ok"
-    clinic.od_health_reason = None
-    clinic.od_health_changed_at = now()
-
-def mark_crm_auth_failed(clinic: RegisteredClinics, *, reason: str)-> None:
-    clinic.crm_health_status = "auth_failed"
-    clinic.crm_health_reason = reason
-    clinic.crm_health_changed_at = now()
-
-def mark_crm_health_ok(clinic: RegisteredClinics) -> None:
-    clinic.crm_health_status = "ok"
-    clinic.crm_health_reason = None
-    clinic.crm_health_changed_at = now()
+sys.modules[__name__] = _implementation

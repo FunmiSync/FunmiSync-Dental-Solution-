@@ -1,23 +1,30 @@
 from fastapi import FastAPI
-from api.routers.webhook import webhook_config
-from core import database
-from api.routers.webhook import webhook_crm
-from core.middleware import RateLimitMiddleware
+from contextlib import asynccontextmanager
+from starlette.concurrency import run_in_threadpool
+from app.controllers import health
+from app.config import settings
+from app.controllers.webhooks import webhook_config
+from app.infrastructure import database
+from app.controllers.webhooks import webhook_crm
+from app.infrastructure.middleware import RateLimitMiddleware
 from fastapi.middleware.cors import CORSMiddleware
-from api.routers import dso_clinic_page
-from auth import login, logout
-from api.registration import user_registration, dso_registration, clinic_registration
-from api.routers import invites
+from app.controllers.workspaces import dso_clinic_page
+from app.controllers.auth import login
+from app.controllers.auth import logout
+from app.controllers.registration import user_registration
+from app.controllers.registration import dso_registration
+from app.controllers.registration import clinic_registration
+from app.controllers.workspaces import invites
 import logging
-from api.routers import workspace
-from api.routers import team_members
-from api.routers.synclog import sync_log_dso
-from api.routers.synclog import sync_log_clinic
-from api.routers.toroforge_endpoint import toroforge_kyc
-from api.routers.toroforge_endpoint import toroforge_wallet_transfer
-from api.routers.toroforge_endpoint import toroforge_wallet_creation
-from api.routers.toroforge_endpoint import toroforge_billing_wallet_read
-from api.routers.toroforge_endpoint import toroforge_funding
+from app.controllers.workspaces import workspace
+from app.controllers.workspaces import team_members
+from app.controllers.sync_logs import sync_log_dso
+from app.controllers.sync_logs import sync_log_clinic
+from app.controllers.billing import toroforge_kyc
+from app.controllers.billing import toroforge_wallet_transfer
+from app.controllers.billing import toroforge_wallet_creation
+from app.controllers.billing import toroforge_billing_wallet_read
+from app.controllers.billing import toroforge_funding
 
 
 log = logging.getLogger("uvicorn.error")
@@ -26,8 +33,14 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
-origins = ["https://www.fumisync.com"]
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(application):
+    await run_in_threadpool(verify_db_on_start)
+    yield
+
+
+origins = settings.cors_origins
+app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -56,9 +69,9 @@ app.include_router(toroforge_wallet_creation.router)
 app.include_router(toroforge_billing_wallet_read.router)
 app.include_router(toroforge_funding.router)
 app.include_router(toroforge_wallet_transfer.router)
+app.include_router(health.router)
 
 
-@app.on_event("startup")
 def verify_db_on_start():
     ok, msg = database.ping_db()
     if ok:

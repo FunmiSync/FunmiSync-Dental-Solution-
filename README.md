@@ -57,16 +57,40 @@ FumiSync API
 ```txt
 .
 |-- main.py                         # FastAPI app entrypoint
-|-- config.py                       # Environment-backed settings
 |-- requirements.txt                # Python dependencies
+|-- app/
+|   |-- config.py                   # Environment-backed settings
+|   |-- controllers/                # HTTP routes (auth, registration, workspaces, sync, billing)
+|   |-- models/entities.py          # Canonical SQLAlchemy models and enums
+|   |-- schemas/api.py              # API input/output schemas (JSON presentation boundary)
+|   |-- services/                   # Application workflows and billing services
+|   |-- security/                   # JWT, CSRF, encryption, RBAC, webhook verification
+|   |-- infrastructure/             # Database, Redis/cache, providers and workers
 |-- alembic/                        # Database migrations
-|-- api/                            # HTTP routers
-|-- auth/                           # Authentication and security helpers
-|-- billing/toroforge/              # ToroForge clients and wallet services
-|-- core/                           # Database, models, schemas, middleware
-|-- infra/                          # Domain services and sync helpers
-|-- workers/                        # Background worker entrypoints
+|-- tests/                          # Contract, behavior and MVC compatibility checks
+|-- tools/                          # Offline contract inspection and DOCX generation
+|-- docs/                           # Contract snapshots and the master teaching guide
+|-- api/, auth/, billing/, core/, infra/, caches/, sdk/, workers/
+                                   # Compatibility modules; edit canonical files in app/
 ```
+
+The backend uses an MVC-oriented API layout with services: controllers handle HTTP,
+models describe persistence, and schemas define the JSON presentation contract.
+Some existing controllers still contain workflow/database orchestration; moving
+files does not by itself make every controller thin. Service extraction and the
+remaining reviewed defects are separate follow-up work.
+
+For example, edit `app/controllers/auth/login.py` for login behavior. The old
+`auth/login.py` path aliases that same module for existing imports. Old queued
+`workers.workers.process_crm_load_job` references still resolve; new code uses
+`app.infrastructure.workers.appointments.process_crm_load_job`. Keep compatibility
+modules until callers and queued jobs have been audited. The full mapping is in
+`docs/mvc_module_map.json`.
+
+The single continuously updated teaching document is
+`docs/FumiSync_Junior_Developer_Guide.docx`, generated from
+`docs/junior_developer_guide.md`. It includes before/after examples, decision
+tradeoffs, tests and independent debugging exercises.
 
 ## Prerequisites
 
@@ -516,7 +540,7 @@ https://fumisync-project.vercel.app/
 
 ## Known Limitations
 
-- Automated tests are not included in this milestone. The supported verification path is the manual reviewer flow above.
+- Automated contract, unit, mocked HTTP and import/metadata/worker compatibility checks are included. They do not replace a real database/provider integration run or browser frontend testing. The manual reviewer flow above requires working service credentials.
 - Premium service wallet debits for eligibility checks, patient messaging, appointment reminders, and AI-assisted calls are part of the billing model and roadmap, but the current submitted backend focuses on wallet creation, KYC, funding, ledger entries, wallet-center reads, and DSO-to-clinic transfers.
 - Full review of wallet funding and transfers requires valid ToroForge/Toronet credentials and provider-side transactions. Without those credentials, reviewers can still inspect the code, run the API, view `/docs`, and validate local setup/migrations.
 - The KYC start endpoint currently returns a two-item response containing the provider KYC URL and wallet password. A future cleanup can wrap this in a named response object.
@@ -553,8 +577,18 @@ alembic revision --autogenerate -m "describe change"
 Check Python syntax quickly:
 
 ```powershell
-python -m compileall api auth billing core infra workers main.py config.py
+python -m compileall app api auth billing core infra caches sdk workers main.py config.py
 ```
+
+Run the automated checks from the project root, using the configured virtual environment:
+
+```powershell
+python -B -m unittest discover -s tests -v
+```
+
+The tests install dummy settings in their process and mock/guard service boundaries;
+they do not execute migrations or real provider transactions. On macOS/Linux, use
+`.venv/bin/python` explicitly if the environment is not activated.
 
 ## Deployment Notes
 
@@ -571,3 +605,13 @@ Recommended production shape:
 ## License
 
 MIT.
+
+## Phase 4 local changes
+
+The master learning guide is [FumiSync_Junior_Developer_Guide.docx](docs/FumiSync_Junior_Developer_Guide.docx), updated in place; Phase 4 is in sections 45–61. It includes code examples, engineering reasoning, recovery scenarios and the rollout sequence. See [local validation](docs/phase_4_validation.md) for evidence and limitations.
+
+**Migration preparation is not deployment.** These workflows now require revision `f4a100000001`. The migration and `tools/backfill_private_data.py` have been prepared but have not been executed against a database. Review the guide's rollout steps and obtain approval for the actual target before running them. Preserve original encryption/HMAC keys.
+
+`GET /health/ready` checks the expected schema plus PostgreSQL/Redis. Configure `CORS_ORIGINS` as explicit JSON origins. Treasury transfer posting remains blocked until `TOROFORGE_SETTLEMENT_FIELD` and `TOROFORGE_SETTLEMENT_SUCCESS_VALUES` are verified against merchant/provider evidence; test fixture fields are not production configuration. Existing API shapes remain checked, while validation, name-prefix searching and uncertain-operation behavior are intentionally stricter.
+
+Deposit verification uses a successful transaction lookup (`result` must be boolean `true`) plus exact transaction ID, destination, currency and amount matching. It does not require the optional settlement-status configuration. This follows the provider behavior clarified by the project owner; live integration remains untested.

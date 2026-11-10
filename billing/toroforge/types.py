@@ -1,9 +1,9 @@
-from dataclasses import dataclass
-from uuid import UUID
+"""Compatibility alias for app.services.billing.types.
 
-@dataclass(frozen=True)
-class ToroForgeProvisionWalletResult:
-    wallet_id: UUID
-    external_wallet_address: str 
-    external_wallet_username: str
-    generated_password: str | None = None
+Edit the canonical module under app/; this path stays for existing imports/jobs.
+Aliasing the module keeps class identities and patched globals shared.
+"""
+import sys
+from app.services.billing import types as _implementation
+
+sys.modules[__name__] = _implementation

@@ -1,0 +1,1 @@
+"""FumiSync app.infrastructure package."""
