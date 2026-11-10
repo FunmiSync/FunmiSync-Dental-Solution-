@@ -1,6 +1,7 @@
 from app.infrastructure.providers.opendental import openDentalApi, OpenDentalRequestError
 from app.services.external_operations import ExternalOperations
 from datetime import date
+from sqlalchemy import select
 from app.models.entities import Patients
 from app.schemas.api import patient_model
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -19,7 +20,7 @@ class PatientService():
 
     async def reserve_patient(self, contact_id : str,   pat : patient_model ):
         contact_hash = hash_lookup(contact_id)
-        row = self.db.query(Patients).filter_by(contact_id_hash=contact_hash, clinic_id=self.clinic_id).first()
+        row = await self.db.scalar(select(Patients).filter_by(contact_id_hash=contact_hash, clinic_id=self.clinic_id).limit(1))
         if row:
             return row 
         
@@ -37,37 +38,35 @@ class PatientService():
 
         try:
             self.db.add(row)
-            self.db.commit()
-            self.db.refresh(row)
+            await self.db.commit()
+            await self.db.refresh(row)
             return row 
         
         except IntegrityError:
-            self.db.rollback()
+            await self.db.rollback()
             row = (
-                self.db.query(Patients)
-                .filter_by(clinic_id=self.clinic_id, contact_id_hash=contact_hash)
-                .first()
+                await self.db.scalar(select(Patients)
+                .filter_by(clinic_id=self.clinic_id, contact_id_hash=contact_hash).limit(1))
             ) 
             return row
         
-    async  def finalize_into_db(self, row: Patients, pat_num):
+    async def finalize_into_db(self, row: Patients, pat_num):
         try:
             row.pat_num = pat_num
-            self.db.commit ()
+            await self.db.commit()
             return(row.id, pat_num)
         except IntegrityError:
-            self.db.rollback()
+            await self.db.rollback()
             existing = (
-                self.db.query(Patients)
-                .filter_by(clinic_id=self.clinic_id, pat_num=pat_num)
-                .first()
+                await self.db.scalar(select(Patients)
+                .filter_by(clinic_id=self.clinic_id, pat_num=pat_num).limit(1))
             )
             if existing:
                 raise OpenDentalRequestError("Patient is already linked to another contact; manual resolution is required")
             raise
 
         except SQLAlchemyError:
-            self.db.rollback()
+            await self.db.rollback()
             raise
 
 
@@ -82,7 +81,7 @@ class PatientService():
         except ValueError as exc:
             raise OpenDentalRequestError("Patient date of birth is invalid") from exc
 
-        row =  await self.reserve_patient(
+        row = await self.reserve_patient(
             contact_id = contact_id,
             pat = pat 
         )
@@ -120,5 +119,5 @@ class PatientService():
             return {"PatNum": int(created["PatNum"])}
         created = await self.operations.execute(key=key, resource_id=row.id, action="patient_create",
             request=pat.model_dump(mode="json"), call=create)
-        self.operations.mark_applied(key)
+        await self.operations.mark_applied(key)
         return await self.finalize_into_db(row, created["PatNum"])

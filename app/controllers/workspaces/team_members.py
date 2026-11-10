@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.security.oauth2 import get_current_user
 from app.infrastructure.database import get_db
@@ -17,10 +17,10 @@ router = APIRouter(tags=["Team"])
 async def get_dso_team_members(
     dso_id: UUID,
     current_user: Users = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    require_dso_access(db=db, user_id=current_user.id, dso_id=dso_id)
-    return build_dso_team_members_cached(db, dso_id=dso_id)
+    await require_dso_access(db=db, user_id=current_user.id, dso_id=dso_id)
+    return await build_dso_team_members_cached(db, dso_id=dso_id)
 
 
 
@@ -29,7 +29,7 @@ async def get_dso_team_members(
 async def get_clinic_team_members(
     clinic_id: UUID,
     current_user: Users = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    require_clinic_access(db=db, user_id=current_user.id, clinic_id=clinic_id)
-    return build_clinic_team_members_cached(db, clinic_id=clinic_id)
+    await require_clinic_access(db=db, user_id=current_user.id, clinic_id=clinic_id)
+    return await build_clinic_team_members_cached(db, clinic_id=clinic_id)

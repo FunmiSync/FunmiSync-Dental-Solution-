@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from dataclasses import dataclass
 from typing import Any, Optional
 from app.security.encryption import encrypt_json_secret, encrypt_secret, hash_lookup
@@ -29,7 +30,7 @@ class SyncLogInput:
 
 
 class AppointmentSyncLogService:
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         self.db = db
 
     def build_change_key(self, data:SyncLogInput)-> str:
@@ -38,12 +39,12 @@ class AppointmentSyncLogService:
             data.direction.value, data.payload], sort_keys=True, default=str)
         return hash_lookup(raw_key)
 
-    def publish_change(self, sync_log: AppointmentSyncLog) -> None:
+    async def publish_change(self, sync_log: AppointmentSyncLog) -> None:
         clinic_id = sync_log.clinic_id
         if clinic_id is None:
             return
 
-        publish_sync_log_changed(
+        await publish_sync_log_changed(
             self.db,
             clinic_id=clinic_id,
             sync_log_id=sync_log.id,
@@ -56,9 +57,9 @@ class AppointmentSyncLogService:
         normalized= " ".join(value.lower().strip().split())
         return normalized or None 
     
-    def get_or_create_sync_log(self, data: SyncLogInput) -> AppointmentSyncLog:
+    async def get_or_create_sync_log(self, data: SyncLogInput) -> AppointmentSyncLog:
         change_key = self.build_change_key(data)
-        sync_log = self.db.query(AppointmentSyncLog). filter_by(change_key = change_key).first()
+        sync_log = await self.db.scalar(select(AppointmentSyncLog). filter_by(change_key = change_key).limit(1))
 
         if not sync_log:
             sync_log = AppointmentSyncLog(
@@ -82,41 +83,41 @@ class AppointmentSyncLogService:
             )
             self.db.add(sync_log)
             try:
-                self.db.commit()
+                await self.db.commit()
             except IntegrityError:
-                self.db.rollback()
-                existing = self.db.query(AppointmentSyncLog).filter_by(change_key=change_key).first()
+                await self.db.rollback()
+                existing = await self.db.scalar(select(AppointmentSyncLog).filter_by(change_key=change_key).limit(1))
                 if existing is None:
                     raise
                 return existing
-            self.db.refresh(sync_log)
-            self.publish_change(sync_log)
+            await self.db.refresh(sync_log)
+            await self.publish_change(sync_log)
         return sync_log
         
 
-    def mark_processing(self, sync_log: AppointmentSyncLog) -> AppointmentSyncLog:
+    async def mark_processing(self, sync_log: AppointmentSyncLog) -> AppointmentSyncLog:
         sync_log.sync_status = SyncStatus.PROCESSING
         sync_log.reason = None
         sync_log.completed_at = None
         sync_log.attempt_count += 1
 
-        self.db.commit()
-        self.db.refresh(sync_log)
-        self.publish_change(sync_log)
+        await self.db.commit()
+        await self.db.refresh(sync_log)
+        await self.publish_change(sync_log)
         return sync_log
     
     
     
-    def mark_operation(self, sync_log: AppointmentSyncLog, *, operation: str) -> AppointmentSyncLog:
+    async def mark_operation(self, sync_log: AppointmentSyncLog, *, operation: str) -> AppointmentSyncLog:
         sync_log.operation = operation
-        self.db.commit()
-        self.db.refresh(sync_log)
-        self.publish_change(sync_log)
+        await self.db.commit()
+        await self.db.refresh(sync_log)
+        await self.publish_change(sync_log)
         return sync_log
     
 
 
-    def mark_success(self, sync_log: AppointmentSyncLog, *, reason: str ="Sync completed successfully", appointment_id : Optional[uuid.UUID]= None,  operation: str, pat_id: Optional[uuid.UUID]= None, apt_num: Optional[int]= None) -> AppointmentSyncLog:
+    async def mark_success(self, sync_log: AppointmentSyncLog, *, reason: str ="Sync completed successfully", appointment_id : Optional[uuid.UUID]= None,  operation: str, pat_id: Optional[uuid.UUID]= None, apt_num: Optional[int]= None) -> AppointmentSyncLog:
         sync_log.sync_status = SyncStatus.PROCESSED
         if operation is not None:
             sync_log.operation = operation
@@ -130,16 +131,16 @@ class AppointmentSyncLogService:
         sync_log.counts_toward_usage = True
         sync_log.is_billable = True
         
-        self.db.commit()
-        self.db.refresh(sync_log)
-        self.publish_change(sync_log)
+        await self.db.commit()
+        await self.db.refresh(sync_log)
+        await self.publish_change(sync_log)
         return sync_log 
     
 
 
 
     
-    def mark_failure(self, sync_log: AppointmentSyncLog, *, reason: str, should_retry: bool, operation: str | None, failure_source: SyncFailureSource, billable: bool | None = None) -> AppointmentSyncLog:
+    async def mark_failure(self, sync_log: AppointmentSyncLog, *, reason: str, should_retry: bool, operation: str | None, failure_source: SyncFailureSource, billable: bool | None = None) -> AppointmentSyncLog:
         sync_log.sync_status = (
             SyncStatus.RETRYING if should_retry else SyncStatus.FAILED
         )
@@ -162,8 +163,8 @@ class AppointmentSyncLogService:
         if not should_retry:
             sync_log.completed_at = datetime.now(timezone.utc)
 
-        self.db.commit()
-        self.db.refresh(sync_log)
-        self.publish_change(sync_log)
+        await self.db.commit()
+        await self.db.refresh(sync_log)
+        await self.publish_change(sync_log)
         return sync_log
 

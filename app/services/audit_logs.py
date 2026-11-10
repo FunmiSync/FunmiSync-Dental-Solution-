@@ -18,6 +18,6 @@ class Auditlogs:
     def __init__(self, clinic_id: UUID | None, db, source: str | None = None):
         self.db, self.clinic_id, self.source = db, clinic_id, source or "api"
 
-    async def log(self, *, entity_type, entity_id, action, status="success", details=None):
+    def log(self, *, entity_type, entity_id, action, status="success", details=None):
         return record_audit(self.db,clinic_id=self.clinic_id,entity_type=entity_type,
                             entity_id=entity_id,action=action,status=status,source=self.source,details=details)

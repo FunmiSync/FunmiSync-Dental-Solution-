@@ -7,13 +7,15 @@ from app.models.entities import Wallet
 from uuid import UUID
 from app.security.encryption import decode_secret
 from urllib.parse import quote
-from sqlalchemy.orm import Session, load_only
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
 
 logger = logging.getLogger(__name__)
 
 
 class ToroForgeKYCService:
-    def __init__(self, db: Session, kyc_client: ToroForgeKYCClient) -> None:
+    def __init__(self, db: AsyncSession, kyc_client: ToroForgeKYCClient) -> None:
          self.db = db
          self.kyc_client = kyc_client
       
@@ -49,7 +51,7 @@ class ToroForgeKYCService:
 
     async def check_wallet_kyc_status(self, *, wallet_id: UUID) -> tuple[dict[str, Any], bool]:
         wallet = (
-            self.db.query(Wallet)
+            await self.db.scalar(select(Wallet)
             .options(
                 load_only(
                     Wallet.id,
@@ -57,8 +59,7 @@ class ToroForgeKYCService:
                     Wallet.kyc_verified,
                 )
             )
-            .filter(Wallet.id == wallet_id)
-            .first()
+            .filter(Wallet.id == wallet_id).limit(1))
         )
         if not wallet:
             raise ToroForgeValidationError("Wallet not found")
@@ -72,25 +73,24 @@ class ToroForgeKYCService:
         wallet.kyc_verified = bool(status["verified"])
 
         try:
-            self.db.commit()
-            self.db.refresh(wallet)
+            await self.db.commit()
+            await self.db.refresh(wallet)
         except Exception:
-            self.db.rollback()
+            await self.db.rollback()
             raise
 
         return status, bool(wallet.kyc_verified)
 
-    def get_cached_wallet_kyc_status(self, *, wallet_id: UUID) -> bool:
+    async def get_cached_wallet_kyc_status(self, *, wallet_id: UUID) -> bool:
         wallet = (
-            self.db.query(Wallet)
+            await self.db.scalar(select(Wallet)
             .options(
                 load_only(
                     Wallet.id,
                     Wallet.kyc_verified,
                 )
             )
-            .filter(Wallet.id == wallet_id)
-            .first()
+            .filter(Wallet.id == wallet_id).limit(1))
         )
 
         if not wallet:
@@ -106,7 +106,7 @@ class ToroForgeKYCService:
             wallet_id: UUID
     ) -> tuple[str, str]:
         
-        wallet = self.db.query(Wallet).filter(Wallet.id == wallet_id).first()
+        wallet = await self.db.scalar(select(Wallet).filter(Wallet.id == wallet_id).limit(1))
 
         if not wallet:
             raise ToroForgeValidationError("Wallet not found")

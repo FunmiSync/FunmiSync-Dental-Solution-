@@ -1,11 +1,8 @@
-from app.infrastructure.database import SessionLocal
-from fastapi import HTTPException, status
-from app.models.entities import RegisteredClinics, Patients
+from app.models.entities import RegisteredClinics
 import httpx
 from app.infrastructure.providers.payloads import patient_payload, appointment_payload, appointment_payload_update, create_commlog, create_pops, retry_with_bak_off
 from app.infrastructure.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError
 from app.schemas.api import patient_model, Appointments_create, Appointments_update, create_commslogs, create_pop_ups
-import  json
 from uuid import UUID
 from app.security.encryption import decode_secret
 from functools import lru_cache
@@ -34,25 +31,19 @@ class openDentalApi:
         name= "opendental"
     )
 
-    def __init__(self, clinic_id: UUID) -> None:
-        db = SessionLocal()
+    def __init__(self, clinic: RegisteredClinics) -> None:
+        # The caller loads the clinic in its own (async) session; no I/O happens here.
+        if clinic.is_disabled:
+            raise OpenDentalAuthError("Clinic is disabled")
         try:
-            clinic = db.query(RegisteredClinics).filter_by(id=clinic_id).first()
-            if not clinic:
-                raise HTTPException(status.HTTP_404_NOT_FOUND, detail="clinic not found ")
-            if clinic.is_disabled:
-                raise OpenDentalAuthError("Clinic is disabled")
-            try:
-                self.developer_key = decode_secret(clinic.od_developer_key)
-                self.customer_key = decode_secret(clinic.od_customer_key)
-            except Exception as exc:
-                raise OpenDentalAuthError("OpenDental credentials cannot be decrypted") from exc
-            if not self.developer_key or not self.customer_key:
-                raise OpenDentalAuthError("OpenDental credentials are missing")
-            self.clinic_num = clinic.clinic_number
-        finally:
-            db.close()
-        self.cb = clinic_breaker(clinic_id)
+            self.developer_key = decode_secret(clinic.od_developer_key)
+            self.customer_key = decode_secret(clinic.od_customer_key)
+        except Exception as exc:
+            raise OpenDentalAuthError("OpenDental credentials cannot be decrypted") from exc
+        if not self.developer_key or not self.customer_key:
+            raise OpenDentalAuthError("OpenDental credentials are missing")
+        self.clinic_num = clinic.clinic_number
+        self.cb = clinic_breaker(clinic.id)
         self.base_url = "https://api.opendental.com/api/v1"
         self.headers = {
             "Authorization": f"ODFHIR {self.developer_key}/{self.customer_key}",
@@ -106,7 +97,7 @@ class openDentalApi:
 
     async def create_patient(self, patient_data: patient_model):
         endpoint = f"/patients"
-        body =  await patient_payload(patient_data)
+        body = patient_payload(patient_data)
         return  await self._request("POST", endpoint, json=body)
 
     async def create_patients(self, patient_data: patient_model):
@@ -118,23 +109,23 @@ class openDentalApi:
     
     async def create_appointments(self, appointment_data: Appointments_create ):
         endpoint = f"/appointments"
-        body = await appointment_payload(appointment_data) 
+        body = appointment_payload(appointment_data) 
         return  await self._request("POST", endpoint, json=body)
     
 
     async def update_appointment(self, Aptnum: int | str, appointment_data: Appointments_update):
         endpoint = f"/appointments/{Aptnum}"
-        body = await appointment_payload_update(appointment_data)
+        body = appointment_payload_update(appointment_data)
         return await self._request("PUT", endpoint, json =body )
     
     async def  create_commslog(self, comms_logs:create_commslogs):
         endpoint = f"/commlogs"
-        body = await create_commlog(comms_logs)
+        body = create_commlog(comms_logs)
         return await self._request("POST", endpoint, json=body)
     
     async def  create_pops(self,  pops:create_pop_ups ):
         endpoint = f"/popups"
-        body = await create_pops(pops)
+        body = create_pops(pops)
         return await self._request("POST", endpoint, json=body)
         
     

@@ -87,8 +87,8 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply",action="store_true",help="Write the reviewed plan; requires explicit operator approval")
     args=parser.parse_args()
-    from app.infrastructure.database import SessionLocal
-    db=SessionLocal()
+    from app.infrastructure.database import SyncSessionLocal
+    db=SyncSessionLocal()
     try:
         changes,counts=plan(db)
         print(json.dumps({"mode":"apply" if args.apply else "dry-run", "rows":counts},sort_keys=True))

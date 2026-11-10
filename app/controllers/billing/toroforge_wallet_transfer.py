@@ -1,23 +1,19 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncIterator
-from typing import NoReturn
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, Header, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.security.oauth2 import get_current_user
-from app.infrastructure.providers.toroforge.exceptions import ToroForgeAuthError, ToroForgeError, ToroForgeHTTPError, ToroForgeTimeoutError, ToroForgeUnavailableError, ToroForgeValidationError
-from app.infrastructure.providers.toroforge.client import ToroForgeClient
-from app.infrastructure.providers.toroforge.wallet_transfer_client import ToroForgeWalletTransferClient
-from app.infrastructure.providers.toroforge.config import get_toroforge_config
-from app.services.billing.wallet_transfer_service import ToroForgeWalletTransferService
+from app.controllers.billing.dependencies import get_toroforge_wallet_transfer_service
+from app.controllers.billing.errors import raise_wallet_transfer_http_error
 from app.infrastructure.database import get_db
 from app.models.entities import Users
 from app.schemas.api import toroforge_wallet_transfer_request, toroforge_wallet_transfer_response
+from app.security.oauth2 import get_current_user
 from app.security.rbac import require_dso_manage
+from app.services.billing.wallet_transfer_service import ToroForgeWalletTransferService
 
 logger = logging.getLogger(__name__)
 
@@ -25,73 +21,6 @@ router = APIRouter(
     prefix="/toroforge",
     tags=["ToroForge Wallet Transfers"],
 )
-
-
-async def get_toroforge_wallet_transfer_service(
-    db: Session = Depends(get_db),
-) -> AsyncIterator[ToroForgeWalletTransferService]:
-    config = get_toroforge_config()
-
-    base_client = ToroForgeClient(
-        config=config,
-        breaker=ToroForgeClient.toroforge_breaker,
-    )
-
-    try:
-        yield ToroForgeWalletTransferService(
-            db=db,
-            transfer_client=ToroForgeWalletTransferClient(base_client),
-        )
-    finally:
-        await base_client.aclose()
-
-
-
-def _raise_wallet_transfer_http_error(exc: Exception) -> NoReturn:
-
-    message = str(exc).strip()
-    lowered = message.lower()
-
-    if isinstance(exc, ToroForgeValidationError):
-        if "not found" in lowered or "does not belong" in lowered:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=message or "Wallet transfer resource not found",
-            ) from exc
-
-        if "insufficient" in lowered:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=message or "Insufficient wallet balance",
-            ) from exc
-
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=message or "Invalid wallet transfer request",
-        ) from exc
-
-    if isinstance(exc, ToroForgeAuthError):
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="ToroForge provider authentication failed",
-        ) from exc
-
-    if isinstance(exc, (ToroForgeTimeoutError, ToroForgeUnavailableError)):
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="ToroForge provider is temporarily unavailable",
-        ) from exc
-
-    if isinstance(exc, (ToroForgeHTTPError, ToroForgeError)):
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=message or "ToroForge provider error",
-        ) from exc
-
-    raise HTTPException(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail="Unexpected error while processing wallet transfer",
-    ) from exc
 
 
 @router.post(
@@ -105,17 +34,13 @@ async def transfer_from_dso_to_clinic(
     payload: toroforge_wallet_transfer_request,
     request: Request,
     current_user: Users = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     idempotency_key: str = Header(..., alias="Idempotency-Key"),
     transfer_service: ToroForgeWalletTransferService = Depends(
         get_toroforge_wallet_transfer_service
     ),
 ):
-    require_dso_manage(
-        db=db,
-        user_id=current_user.id,
-        dso_id=dso_id,
-    )
+    await require_dso_manage(db=db, user_id=current_user.id, dso_id=dso_id)
 
     log_ctx = {
         "request_id": getattr(request.state, "request_id", None),
@@ -125,7 +50,6 @@ async def transfer_from_dso_to_clinic(
         "currency": payload.currency.strip().upper(),
         "idempotency_key": idempotency_key,
     }
-
     logger.info("ToroForge DSO to clinic wallet transfer requested", extra=log_ctx)
 
     try:
@@ -137,11 +61,9 @@ async def transfer_from_dso_to_clinic(
             idempotency_key=idempotency_key,
             initiated_by_user_id=current_user.id,
         )
-
     except Exception as exc:
         logger.exception("ToroForge wallet transfer failed", extra=log_ctx)
-        _raise_wallet_transfer_http_error(exc)
-
+        raise_wallet_transfer_http_error(exc)
 
     logger.info(
         "ToroForge DSO to clinic wallet transfer completed",
@@ -152,5 +74,4 @@ async def transfer_from_dso_to_clinic(
             "status": result.get("status"),
         },
     )
-
     return result

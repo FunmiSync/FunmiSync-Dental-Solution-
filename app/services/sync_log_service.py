@@ -3,9 +3,10 @@ import json
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Literal, TypeAlias, cast
 from uuid import UUID
-from fastapi import HTTPException, status
-from sqlalchemy import and_, or_
-from sqlalchemy.orm import Session, load_only
+from app.services.errors import InvalidRequest, NotFound
+from sqlalchemy import and_, func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
 from app.security.encryption import decode_secret, decode_json_secret
 from app.models.entities import AppointmentSyncLog, RegisteredClinics, SyncStatus
 from app.schemas.api import sync_log_clinic_option_out, sync_log_page_out, sync_log_row_out, sync_log_summary_out, sync_log_detail_out
@@ -118,7 +119,7 @@ def _decode_cursor(cursor: str) -> tuple[datetime, UUID]:
         row_id = UUID(payload["id"])
         return started_at, row_id
     except Exception as exc:
-        raise HTTPException(status_code=400, detail="Invalid cursor") from exc
+        raise InvalidRequest("Invalid cursor") from exc
 
 
 def _resolve_date_window(
@@ -138,10 +139,10 @@ def _resolve_date_window(
         date_to = date_from
 
     if date_from is None or date_to is None:
-        raise HTTPException(status_code=400, detail="Invalid date window")
+        raise InvalidRequest("Invalid date window")
 
     if date_from > date_to:
-        raise HTTPException(status_code=400, detail="date_from cannot be after date_to")
+        raise InvalidRequest("date_from cannot be after date_to")
 
     start_dt = datetime.combine(date_from, time.min, tzinfo=timezone.utc)
     end_dt = datetime.combine(
@@ -171,21 +172,26 @@ def apply_sync_log_search(query, search: str | None ):
     )
 
 
-def base_scope_query(db: Session, dso_id: UUID):
+def base_scope_query(dso_id: UUID):
     return (
-        db.query(AppointmentSyncLog, RegisteredClinics)
+        select(AppointmentSyncLog, RegisteredClinics)
         .join(RegisteredClinics, AppointmentSyncLog.clinic_id == RegisteredClinics.id)
         .options(load_only(RegisteredClinics.id, RegisteredClinics.clinic_name))
         .filter(RegisteredClinics.dso_id == dso_id)
     )
 
-def clinic_scope_query(db:Session, clinic_id: UUID):
+def clinic_scope_query(clinic_id: UUID):
     return (
-        db.query(AppointmentSyncLog, RegisteredClinics)
+        select(AppointmentSyncLog, RegisteredClinics)
         .join(RegisteredClinics, AppointmentSyncLog.clinic_id == RegisteredClinics.id)
         .options(load_only(RegisteredClinics.id, RegisteredClinics.clinic_name))
         .filter(RegisteredClinics.id == clinic_id)
     )
+
+
+async def _count(db: AsyncSession, statement) -> int:
+    # Same SQL shape as Query.count(): count the rows of the filtered statement.
+    return await db.scalar(select(func.count()).select_from(statement.subquery()))
 
 
 def serialize_key(log: AppointmentSyncLog, clinic: RegisteredClinics) -> sync_log_row_out:
@@ -212,8 +218,8 @@ def serialize_key(log: AppointmentSyncLog, clinic: RegisteredClinics) -> sync_lo
     )
 
 #DSO LEVEL 
-def build_dso_summary(
-    db: Session,
+async def build_dso_summary(
+    db: AsyncSession,
     dso_id: UUID,
     clinic_id: UUID | None,
     date_from: date | None,
@@ -221,7 +227,7 @@ def build_dso_summary(
 ) -> sync_log_summary_out:
     start_dt, end_dt = _resolve_date_window(date_from, date_to)
 
-    query = base_scope_query(db, dso_id).filter(
+    query = base_scope_query(dso_id).filter(
         AppointmentSyncLog.started_at >= start_dt,
         AppointmentSyncLog.started_at < end_dt,
     )
@@ -229,18 +235,18 @@ def build_dso_summary(
     if clinic_id is not None:
         query = query.filter(AppointmentSyncLog.clinic_id == clinic_id)
 
-    synced_today = query.filter(
+    synced_today = await _count(db, query.filter(
         AppointmentSyncLog.sync_status == SyncStatus.PROCESSED
-    ).count()
-    in_progress = query.filter(
+    ))
+    in_progress = await _count(db, query.filter(
         AppointmentSyncLog.sync_status.in_([SyncStatus.QUEUED, SyncStatus.PROCESSING])
-    ).count()
-    needs_attention = query.filter(
+    ))
+    needs_attention = await _count(db, query.filter(
         AppointmentSyncLog.sync_status == SyncStatus.RETRYING
-    ).count()
-    failed = query.filter(
+    ))
+    failed = await _count(db, query.filter(
         AppointmentSyncLog.sync_status == SyncStatus.FAILED
-    ).count()
+    ))
 
     return sync_log_summary_out(
         synced_today=synced_today,
@@ -250,8 +256,8 @@ def build_dso_summary(
     )
 
 #DSO Summary cache
-def build_summary_cached(
-        db: Session,
+async def build_summary_cached(
+        db: AsyncSession,
         *,
         dso_id: UUID,
         clinic_id:UUID | None,
@@ -266,7 +272,7 @@ def build_summary_cached(
         date_to=date_to
     )
 
-    cached = cache_get_json(key)
+    cached = await cache_get_json(key)
     if cached:
         logger.info(
         "Sync log DSO summary cache hit",
@@ -280,7 +286,7 @@ def build_summary_cached(
         )
         return sync_log_summary_out(**cached)
     
-    summary = build_dso_summary(
+    summary = await build_dso_summary(
         db,
         dso_id=dso_id,
         clinic_id=clinic_id,
@@ -288,7 +294,7 @@ def build_summary_cached(
         date_to=date_to
     )
 
-    cache_set_json(
+    await cache_set_json(
         key,
         summary.model_dump(mode="json"),
         summary_ttl_seconds(date_from=date_from, date_to=date_to)
@@ -299,21 +305,21 @@ def build_summary_cached(
 
 
 # CLINIC LEVEL 
-def build_clinic_level_summary(db: Session, clinic_id: UUID, date_from: date | None, date_to: date | None) -> sync_log_summary_out:
+async def build_clinic_level_summary(db: AsyncSession, clinic_id: UUID, date_from: date | None, date_to: date | None) -> sync_log_summary_out:
 
     start_dt, end_dt = _resolve_date_window(date_from , date_to)
 
-    query = clinic_scope_query(db, clinic_id).filter(AppointmentSyncLog.started_at >= start_dt, AppointmentSyncLog.started_at < end_dt)
+    query = clinic_scope_query(clinic_id).filter(AppointmentSyncLog.started_at >= start_dt, AppointmentSyncLog.started_at < end_dt)
 
-    synced_today = query.filter(AppointmentSyncLog.sync_status == SyncStatus.PROCESSED).count()
+    synced_today = await _count(db, query.filter(AppointmentSyncLog.sync_status == SyncStatus.PROCESSED))
 
-    in_progress = query.filter(AppointmentSyncLog.sync_status.in_([SyncStatus.QUEUED, SyncStatus.PROCESSING])).count()
+    in_progress = await _count(db, query.filter(AppointmentSyncLog.sync_status.in_([SyncStatus.QUEUED, SyncStatus.PROCESSING])))
 
-    needs_attention = query.filter(AppointmentSyncLog.sync_status == SyncStatus.RETRYING).count()
+    needs_attention = await _count(db, query.filter(AppointmentSyncLog.sync_status == SyncStatus.RETRYING))
 
-    failed = query.filter(
+    failed = await _count(db, query.filter(
         AppointmentSyncLog.sync_status == SyncStatus.FAILED
-    ).count()
+    ))
 
     return sync_log_summary_out(
         synced_today=synced_today,
@@ -324,8 +330,8 @@ def build_clinic_level_summary(db: Session, clinic_id: UUID, date_from: date | N
 
 
 #clinic summary cache 
-def build_clinic_level_summary_cached(
-        db:Session,
+async def build_clinic_level_summary_cached(
+        db: AsyncSession,
         *,
         clinic_id: UUID,
         date_from: date | None,
@@ -339,7 +345,7 @@ def build_clinic_level_summary_cached(
         date_from=date_from,
         date_to=date_to
     ) 
-    cached = cache_get_json(key)
+    cached = await cache_get_json(key)
     if cached:
         logger.info(
         "Sync log clinic summary cache hit",
@@ -352,14 +358,14 @@ def build_clinic_level_summary_cached(
         )
         return sync_log_summary_out(**cached)
     
-    summary = build_clinic_level_summary(
+    summary = await build_clinic_level_summary(
         db,
         clinic_id=clinic_id,
         date_from=date_from,
         date_to=date_to
     )
 
-    cache_set_json(
+    await cache_set_json(
         key,
         summary.model_dump(mode="json"),
         summary_ttl_seconds(date_from=date_from, date_to=date_to)
@@ -369,19 +375,18 @@ def build_clinic_level_summary_cached(
 
 
 #DSO LEVEL 
-def build_clinic_options(
-    db: Session,
+async def build_clinic_options(
+    db: AsyncSession,
     dso_id: UUID,
 ) -> list[sync_log_clinic_option_out]:
     clinics = cast(
         list[RegisteredClinics],
-        (
-            db.query(RegisteredClinics)
+        (await db.scalars(
+            select(RegisteredClinics)
             .options(load_only(RegisteredClinics.id, RegisteredClinics.clinic_name))
             .filter_by(dso_id=dso_id)
             .order_by(RegisteredClinics.clinic_name.asc())
-            .all()
-        ),
+        )).all(),
     )
 
     return [
@@ -391,17 +396,19 @@ def build_clinic_options(
 
 
 #clininc level 
-def build_single_clinic_option(db: Session, clinic_id: UUID) -> list[sync_log_clinic_option_out]:
+async def build_single_clinic_option(db: AsyncSession, clinic_id: UUID) -> list[sync_log_clinic_option_out]:
     clinic = cast(
         RegisteredClinics | None,
-        db.query(RegisteredClinics)
-        .options(load_only(RegisteredClinics.id, RegisteredClinics.clinic_name))
-        .filter_by(id=clinic_id)
-        .first(),
+        await db.scalar(
+            select(RegisteredClinics)
+            .options(load_only(RegisteredClinics.id, RegisteredClinics.clinic_name))
+            .filter_by(id=clinic_id)
+            .limit(1)
+        ),
     )
 
     if clinic is None :
-        raise HTTPException(status_code= status.HTTP_404_NOT_FOUND, detail= "Clinic not Found")
+        raise NotFound("Clinic not Found")
 
     return [
         sync_log_clinic_option_out(
@@ -412,8 +419,8 @@ def build_single_clinic_option(db: Session, clinic_id: UUID) -> list[sync_log_cl
 
 
 ###DSO LEVEL
-def build_items(
-    db: Session,
+async def build_items(
+    db: AsyncSession,
     *,
     dso_id: UUID,
     clinic_id: UUID | None,
@@ -426,7 +433,7 @@ def build_items(
 ) -> tuple[list[sync_log_row_out], str | None]:
     start_dt, end_dt = _resolve_date_window(date_from, date_to)
 
-    query = base_scope_query(db, dso_id).filter(
+    query = base_scope_query(dso_id).filter(
         AppointmentSyncLog.started_at >= start_dt,
         AppointmentSyncLog.started_at < end_dt,
     )
@@ -453,12 +460,10 @@ def build_items(
 
     rows = cast(
         list[SyncLogQueryRow],
-        query.order_by(
+        (await db.execute(query.order_by(
             AppointmentSyncLog.started_at.desc(),
             AppointmentSyncLog.id.desc(),
-        )
-        .limit(limit + 1)
-        .all(),
+        ).limit(limit + 1))).all(),
     )
 
     has_more = len(rows) > limit
@@ -476,8 +481,8 @@ def build_items(
 
 
 # dso items cached
-def build_dso_items_cached(
-        db: Session,
+async def build_dso_items_cached(
+        db: AsyncSession,
         *,
         dso_id: UUID,
         clinic_id: UUID | None,
@@ -500,7 +505,7 @@ def build_dso_items_cached(
         limit=limit
         )
     
-    cached= cache_get_json(key)
+    cached= await cache_get_json(key)
     if cached:
         logger.info(
             "Sync log DSO items cache hit",
@@ -519,7 +524,7 @@ def build_dso_items_cached(
         items = [sync_log_row_out(**item) for item in cached["items"]]
         return items, cached["next_cursor"]
     
-    items, next_cursor = build_items(
+    items, next_cursor = await build_items(
         db,
         dso_id=dso_id,
         clinic_id=clinic_id,
@@ -531,7 +536,7 @@ def build_dso_items_cached(
         cursor=cursor
     )
 
-    cache_set_json(
+    await cache_set_json(
         key,
         {
             "items": [item.model_dump(mode="json") for item in items],
@@ -545,8 +550,8 @@ def build_dso_items_cached(
 
 
 ##CLINIC LEVEL 
-def build_clinic_items(
-        db: Session,
+async def build_clinic_items(
+        db: AsyncSession,
         *,
         clinic_id: UUID,
         status: SyncStatus | None,
@@ -560,7 +565,7 @@ def build_clinic_items(
     
     start_dt, end_dt = _resolve_date_window(date_from, date_to)
 
-    query = clinic_scope_query(db, clinic_id).filter(AppointmentSyncLog.started_at >= start_dt,AppointmentSyncLog.started_at < end_dt )
+    query = clinic_scope_query(clinic_id).filter(AppointmentSyncLog.started_at >= start_dt,AppointmentSyncLog.started_at < end_dt )
 
     if status is not None:
         query = query.filter(AppointmentSyncLog.sync_status == status)
@@ -575,7 +580,7 @@ def build_clinic_items(
         ))
 
 
-    rows =cast(list[SyncLogQueryRow], query.order_by(AppointmentSyncLog.started_at.desc(), AppointmentSyncLog.id.desc()).limit(limit + 1).all() )
+    rows = cast(list[SyncLogQueryRow], (await db.execute(query.order_by(AppointmentSyncLog.started_at.desc(), AppointmentSyncLog.id.desc()).limit(limit + 1))).all())
 
 
     has_more =len(rows) > limit
@@ -594,8 +599,8 @@ def build_clinic_items(
 
 
 
-def build_clinic_items_cached(
-        db:Session,
+async def build_clinic_items_cached(
+        db: AsyncSession,
         *,
         clinic_id:UUID,
         status: SyncStatus | None,
@@ -618,7 +623,7 @@ def build_clinic_items_cached(
             limit=limit
     )
         
-        cached = cache_get_json(key)
+        cached = await cache_get_json(key)
         if cached:
             logger.info(
                 "Sync log clinic items cache hit",
@@ -636,7 +641,7 @@ def build_clinic_items_cached(
             items = [sync_log_row_out(**item) for item in cached["items"]]
             return items, cached["next_cursor"]
         
-        items,  next_cursor = build_clinic_items(
+        items,  next_cursor = await build_clinic_items(
             db,
             clinic_id=clinic_id,
             status=status,
@@ -647,7 +652,7 @@ def build_clinic_items_cached(
             cursor=cursor
         )
 
-        cache_set_json(
+        await cache_set_json(
             key,
             {
                 "items": [item.model_dump(mode="json") for item in items],
@@ -660,8 +665,8 @@ def build_clinic_items_cached(
 
     
 ###DSO LEVEL
-def build_page_snapshot(
-    db: Session,
+async def build_page_snapshot(
+    db: AsyncSession,
     *,
     dso_id: UUID,
     clinic_id: UUID | None,
@@ -672,7 +677,7 @@ def build_page_snapshot(
     date_to: date | None,
     cursor: str | None,
 ) -> sync_log_page_out:
-    items, next_cursor = build_items(
+    items, next_cursor = await build_items(
         db,
         dso_id=dso_id,
         clinic_id=clinic_id,
@@ -687,22 +692,22 @@ def build_page_snapshot(
     return sync_log_page_out(
         generated_at=datetime.now(timezone.utc),
         visible_count=len(items),
-        summary=build_dso_summary(
+        summary=await build_dso_summary(
             db,
             dso_id=dso_id,
             clinic_id=clinic_id,
             date_from=date_from,
             date_to=date_to,
         ),
-        clinics=build_clinic_options(db, dso_id),
+        clinics=await build_clinic_options(db, dso_id),
         items=items,
         next_cursor=next_cursor,
     )
 
 
 
-def build_dso_page_snapshot_cached(
-        db:Session,
+async def build_dso_page_snapshot_cached(
+        db: AsyncSession,
         *,
         dso_id:UUID,
         clinic_id: UUID| None,
@@ -714,7 +719,7 @@ def build_dso_page_snapshot_cached(
         cursor: str | None
 ) -> sync_log_page_out:
     
-    items, next_cursor = build_dso_items_cached(
+    items, next_cursor = await build_dso_items_cached(
         db,
         dso_id=dso_id,
         clinic_id=clinic_id,
@@ -729,22 +734,22 @@ def build_dso_page_snapshot_cached(
     return sync_log_page_out(
         generated_at=datetime.now(timezone.utc),
         visible_count=len(items),
-        summary=build_summary_cached(
+        summary=await build_summary_cached(
             db,
             dso_id=dso_id,
             clinic_id= clinic_id,
             date_from=date_from,
             date_to=date_to,
         ),
-        clinics= build_clinic_options(db, dso_id),
+        clinics= await build_clinic_options(db, dso_id),
         items= items,
         next_cursor= next_cursor
     )
 
 
     #####CLINIC LEVEL 
-def build_clinic_page_snapshot(
-        db: Session,
+async def build_clinic_page_snapshot(
+        db: AsyncSession,
         *,
         clinic_id: UUID,
         status: SyncStatus | None,
@@ -756,17 +761,17 @@ def build_clinic_page_snapshot(
 
 ) -> sync_log_page_out:
     
-    items, next_cursor = build_clinic_items(
+    items, next_cursor = await build_clinic_items(
         db, clinic_id = clinic_id, status=status, search= search, limit=limit, date_from = date_from, date_to = date_to, cursor=cursor 
     )
     
     return sync_log_page_out(
         generated_at = datetime.now(timezone.utc),
         visible_count= len(items),
-        summary= build_clinic_level_summary(
+        summary= await build_clinic_level_summary(
             db, clinic_id = clinic_id, date_from = date_from, date_to= date_to
         ),
-        clinics = build_single_clinic_option(db, clinic_id),
+        clinics = await build_single_clinic_option(db, clinic_id),
         items= items,
         next_cursor=next_cursor
 
@@ -774,8 +779,8 @@ def build_clinic_page_snapshot(
 
 
 
-def build_clinic_page_snapshot_cached(
-    db: Session,
+async def build_clinic_page_snapshot_cached(
+    db: AsyncSession,
     *,
     clinic_id: UUID,
     status: SyncStatus | None,
@@ -785,7 +790,7 @@ def build_clinic_page_snapshot_cached(
     date_to: date | None,
     cursor: str | None,
 ) -> sync_log_page_out:
-    items, next_cursor = build_clinic_items_cached(
+    items, next_cursor = await build_clinic_items_cached(
         db,
         clinic_id=clinic_id,
         status=status,
@@ -799,29 +804,29 @@ def build_clinic_page_snapshot_cached(
     return sync_log_page_out(
         generated_at=datetime.now(timezone.utc),
         visible_count=len(items),
-        summary=build_clinic_level_summary_cached(
+        summary=await build_clinic_level_summary_cached(
             db,
             clinic_id=clinic_id,
             date_from=date_from,
             date_to=date_to,
         ),
-        clinics=build_single_clinic_option(db, clinic_id),
+        clinics=await build_single_clinic_option(db, clinic_id),
         items=items,
         next_cursor=next_cursor,
     )
 
 ####dso level 
-def build_sync_log_detail(
-        db:Session,
+async def build_sync_log_detail(
+        db: AsyncSession,
         *,
         dso_id: UUID,
         sync_log_id: UUID
 ) -> sync_log_detail_out:
     
-    row =cast(SyncLogQueryRow | None, base_scope_query(db, dso_id).filter(AppointmentSyncLog.id == sync_log_id).first())
+    row = cast(SyncLogQueryRow | None, (await db.execute(base_scope_query(dso_id).filter(AppointmentSyncLog.id == sync_log_id).limit(1))).first())
 
     if row is None:
-        raise HTTPException(status_code = status.HTTP_404_NOT_FOUND, detail="Sync log not found")
+        raise NotFound("Sync log not found")
     
     log, clinic = row 
     base = serialize_key(log, clinic)
@@ -837,21 +842,23 @@ def build_sync_log_detail(
     )
 
 
-def build_clinic_sync_log_detail(
-    db: Session,
+async def build_clinic_sync_log_detail(
+    db: AsyncSession,
     *,
     clinic_id: UUID,
     sync_log_id: UUID,
 ) -> sync_log_detail_out:
     row = cast(
         SyncLogQueryRow | None,
-        clinic_scope_query(db, clinic_id)
-        .filter(AppointmentSyncLog.id == sync_log_id)
-        .first(),
+        (await db.execute(
+            clinic_scope_query(clinic_id)
+            .filter(AppointmentSyncLog.id == sync_log_id)
+            .limit(1)
+        )).first(),
     )
 
     if row is None:
-        raise HTTPException(status_code=404, detail="Sync log not found")
+        raise NotFound("Sync log not found")
 
     log, clinic = row
     base = serialize_key(log, clinic)

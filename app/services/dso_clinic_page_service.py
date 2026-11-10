@@ -4,14 +4,14 @@ from typing import Any, cast as type_cast
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from app.security.encryption import decode_secret
-from fastapi import HTTPException, status
-from sqlalchemy import String, cast, func, or_
+from app.services.errors import NotFound, OperationFailed
+from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.exc import  SQLAlchemyError
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.entities import AppointmentSyncLog, RegisteredClinics, SyncStatus, RoleAssignment, ScopeType, RoleType
 from app.schemas.api import dso_clinic_actions_out, dso_clinic_disabled_out, dso_clinic_summary_Out, dso_clinic_list_out, dso_clinic_row_out
 from app.infrastructure.cache.dso_clinic_page_cache import DSO_CLINIC_LIST_TTL_SECONDS, cache_get_json, cache_set_json, dso_clinic_list_cache_Key, invalidate_dso_clinic_list_cache
-from app.security.rbac import get_clinic_role, get_dso_role
+from app.security.rbac import get_dso_role
 import logging
 
 logger = logging.getLogger(__name__)
@@ -121,8 +121,8 @@ def build_row_actions(
     )
 
 
-def build_dso_clinic_list(
-    db:Session,
+async def build_dso_clinic_list(
+    db: AsyncSession,
     *,
     dso_id:UUID,
     user_id:UUID,
@@ -140,7 +140,7 @@ def build_dso_clinic_list(
         offset=offset
     )
 
-    cached = cache_get_json(cache_key)
+    cached = await cache_get_json(cache_key)
     if cached:
         logger.info(
             "DSO clinic page cache hit",
@@ -169,11 +169,11 @@ def build_dso_clinic_list(
 
     start_dt, end_dt = today_window()
 
-    query = db.query(RegisteredClinics).filter(RegisteredClinics.dso_id ==dso_id)
+    query = select(RegisteredClinics).where(RegisteredClinics.dso_id == dso_id)
 
     if search:
         pattern = f"%{search.strip()}%"
-        query = query.filter(
+        query = query.where(
             or_(
                 RegisteredClinics.clinic_name.ilike(pattern),
                 RegisteredClinics.clinic_timezone.ilike(pattern),
@@ -181,20 +181,18 @@ def build_dso_clinic_list(
             )
         )
 
-    clinics = query.order_by(RegisteredClinics.clinic_name.asc()).all()
+    clinics = (await db.scalars(query.order_by(RegisteredClinics.clinic_name.asc()))).all()
     clinic_ids= [clinic.id for clinic in clinics]
 
-    dso_role = get_dso_role(db,user_id, dso_id)
+    dso_role = await get_dso_role(db, user_id, dso_id)
 
     clinic_roles = (
-        db.query(RoleAssignment)
-        .filter(
+        (await db.scalars(select(RoleAssignment).where(
             RoleAssignment.user_id == user_id,
             RoleAssignment.scope_type == ScopeType.CLINIC,
             RoleAssignment.clinic_id.in_(clinic_ids),
-            RoleAssignment.is_active == True,
-        )
-        .all()
+            RoleAssignment.is_active.is_(True),
+        ))).all()
         if clinic_ids
         else []
     )
@@ -205,7 +203,7 @@ def build_dso_clinic_list(
             clinic_role_map[UUID(str(row.clinic_id))] = row
 
     rows = (
-            db.query(
+            (await db.execute(select(
                 AppointmentSyncLog.clinic_id, func.count(AppointmentSyncLog.id)
                 .filter(
                     AppointmentSyncLog.started_at >= start_dt,
@@ -214,10 +212,10 @@ def build_dso_clinic_list(
                 )
                 .label("synced_today"),
                 func.max(AppointmentSyncLog.started_at).label("last_sync_at"))
-                .filter(
+                .where(
                     AppointmentSyncLog.clinic_id.in_(clinic_ids)).group_by(
                         AppointmentSyncLog.clinic_id
-                    ).all()
+                    ))).all()
                     if clinic_ids
                     else[]
                 )
@@ -278,7 +276,7 @@ def build_dso_clinic_list(
         items= page_items,
     )
 
-    cache_set_json(
+    await cache_set_json(
         cache_key,
         response.model_dump(mode= "json"),
         DSO_CLINIC_LIST_TTL_SECONDS
@@ -303,15 +301,15 @@ def build_dso_clinic_list(
     
 
 ######## disable CLINIC 
-def disable_dso_clinic(
-    db:Session,
+async def disable_dso_clinic(
+    db: AsyncSession,
     *,
     dso_id: UUID,
     clinic_id: UUID,
     disabled_by:UUID
 )-> dso_clinic_disabled_out:
 
-    clinic = db.query(RegisteredClinics).filter(RegisteredClinics.id == clinic_id, RegisteredClinics.dso_id == dso_id).first()
+    clinic = await db.scalar(select(RegisteredClinics).where(RegisteredClinics.id == clinic_id, RegisteredClinics.dso_id == dso_id).limit(1))
 
     if clinic is None:
         logger.warning(
@@ -322,10 +320,7 @@ def disable_dso_clinic(
                 "disabled_by": str(disabled_by),
             },
         )
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Clinic not found in this DSO",
-        )
+        raise NotFound("Clinic not found in this DSO")
     now = datetime.now(timezone.utc)
 
     if not clinic.is_disabled:
@@ -335,9 +330,9 @@ def disable_dso_clinic(
 
         try:
             record_audit(db,clinic_id=clinic.id,entity_type="clinic",entity_id=clinic.id,action="disable",details={"actor_user_id":str(disabled_by)})
-            db.commit()
-            db.refresh(clinic)
-            invalidate_dso_clinic_list_cache(dso_id=dso_id)
+            await db.commit()
+            await db.refresh(clinic)
+            await invalidate_dso_clinic_list_cache(dso_id=dso_id)
             logger.info(
                 "Clinic disabled successfully",
                 extra={
@@ -348,7 +343,7 @@ def disable_dso_clinic(
                 },
             )
         except SQLAlchemyError:
-            db.rollback()
+            await db.rollback()
             logger.exception(
                 "Failed to disable clinic",
                 extra={
@@ -357,10 +352,7 @@ def disable_dso_clinic(
                     "disabled_by": str(disabled_by),
                 },
             )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Unable to disable clinic at this time",
-            )
+            raise OperationFailed("Unable to disable clinic at this time")
         
 
     else:
@@ -374,7 +366,7 @@ def disable_dso_clinic(
             },
         )
 
-    invalidate_dso_clinic_list_cache(dso_id=dso_id)
+    await invalidate_dso_clinic_list_cache(dso_id=dso_id)
 
     logger.info(
         "Invalidated DSO clinic list cache after disable",

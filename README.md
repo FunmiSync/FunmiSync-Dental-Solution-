@@ -76,9 +76,59 @@ FumiSync API
 
 The backend uses an MVC-oriented API layout with services: controllers handle HTTP,
 models describe persistence, and schemas define the JSON presentation contract.
-Some existing controllers still contain workflow/database orchestration; moving
-files does not by itself make every controller thin. Service extraction and the
-remaining reviewed defects are separate follow-up work.
+Each layer has one job, and `tests/test_mvc_architecture.py` enforces the rules:
+
+| Layer | Owns | Must not |
+|---|---|---|
+| `controllers/` | Route signature, auth guards, calling one service, shaping the response | Query or commit the database session; import another router module |
+| `security/` | Request guards that raise `HTTPException` (RBAC, wallet access, CSRF, JWT) | Business workflows |
+| `services/` | Business rules, transactions, cache invalidation, provider calls | Raise `HTTPException`; import controllers |
+| `models/`, `schemas/` | Tables and JSON shapes | Workflow logic |
+
+Services report expected failures by raising an error from `app/services/errors.py`
+(`NotFound`, `PermissionDenied`, `InvalidRequest`, ...). `app/controllers/errors.py`
+turns it into the HTTP status and `{"detail": ...}` body, so a route usually looks like:
+
+```python
+@router.post("/accept", status_code=status.HTTP_201_CREATED)
+async def accept_invite(payload: accept_invite_request, current_user: Users = Depends(get_current_user),
+                        db: Session = Depends(get_db)):
+    return invite_service.accept_invite(db, token=payload.token, user=current_user)
+```
+
+### Async database and I/O
+
+The API and the background worker are fully async:
+
+- **Database:** SQLAlchemy `AsyncSession` on `asyncpg` (`app/infrastructure/database.py`).
+  Write queries as `await db.scalar(select(Model).where(...))`; the legacy `db.query()` API
+  is not available on an async session, and a test rejects it in `app/`. Alembic migrations
+  and `tools/` keep a separate synchronous engine (`psycopg2`).
+- **Supabase:** SSL is required, and prepared-statement caching is disabled so the same
+  settings work on the direct connection or session pooler (port 5432) and the transaction
+  pooler (port 6543).
+- **Redis:** caches, rate limits and live-update pub/sub use the async client. RQ has no async
+  client, so jobs are enqueued through `run_in_threadpool`.
+- **CPU-heavy or blocking libraries:** bcrypt and Google token verification run in
+  `run_in_threadpool` so they never freeze the event loop.
+- **Background jobs:** each RQ job runs in its own event loop, so it opens a job-scoped session
+  with `worker_session()` instead of the shared pool.
+
+Two async rules to remember:
+
+1. **Committed objects keep their values** (`expire_on_commit=False`); call
+   `await db.refresh(obj)` when you need fresh database state.
+2. **A rollback expires every row loaded in that transaction**, and reading an expired
+   attribute raises `MissingGreenlet` instead of silently reloading. `ExternalOperations`
+   rolls back when a provider call fails, so code that keeps using a row afterwards calls
+   `await reload_expired(db, row)` first, or captures values such as ids beforehand.
+
+`tests/test_mvc_architecture.py` fails if an `async def` never awaits or a session call
+(`commit`, `execute`, ...) is not awaited.
+
+Billing controllers share `controllers/billing/dependencies.py` (per-request ToroForge
+clients) and `controllers/billing/errors.py` (provider-error mapping); the sync-log
+streams share `controllers/sync_logs/streaming.py`.
 
 For example, edit `app/controllers/auth/login.py` for login behavior. The old
 `auth/login.py` path aliases that same module for existing imports. Old queued

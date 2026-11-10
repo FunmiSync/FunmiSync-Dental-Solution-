@@ -3,7 +3,9 @@ import logging
 import secrets
 import string
 from uuid import UUID, uuid4
-from sqlalchemy.orm import Session, load_only
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.security.encryption import encrypt_secret, decode_secret, decode_json_secret, hash_lookup
 from app.services.external_operations import ExternalOperations, ReconciliationRequired
@@ -15,6 +17,7 @@ from app.infrastructure.providers.toroforge.keystore_client import ToroForgeKeyS
 from app.infrastructure.providers.toroforge.tns_client import ToroForgeTNSClient
 from app.services.billing.types import ToroForgeProvisionWalletResult
 from app.infrastructure.cache.toroforge_billing_cache import invalidate_billing_scope
+from app.infrastructure.database import reload_expired
 
 
 logger = logging.getLogger(__name__)
@@ -22,7 +25,7 @@ logger = logging.getLogger(__name__)
 class ToroForgeWalletService:
     def __init__(
             self,
-            db:Session,
+            db: AsyncSession,
             keystore_client : ToroForgeKeyStoreClient,
             tns_client: ToroForgeTNSClient
     ) -> None:
@@ -52,10 +55,9 @@ class ToroForgeWalletService:
         
         
         clinic = (
-                self.db.query(RegisteredClinics)
+                await self.db.scalar(select(RegisteredClinics)
                 .options(load_only(RegisteredClinics.id, RegisteredClinics.dso_id))
-                .filter(RegisteredClinics.id == clinic_id)
-                .first()
+                .filter(RegisteredClinics.id == clinic_id).limit(1))
             )
 
 
@@ -100,7 +102,7 @@ class ToroForgeWalletService:
             },
         )
 
-        dso= (self.db.query(Dso.id).filter(Dso.id == dso_id).first())
+        dso= (await self.db.scalar(select(Dso.id).filter(Dso.id == dso_id).limit(1)))
 
         if not dso:
             logger.warning(
@@ -145,7 +147,7 @@ class ToroForgeWalletService:
         if not normalized_key:
             raise ToroForgeValidationError("Idempotency key is required")
         
-        request_row = self.db.query(WalletCreationRequest).filter(WalletCreationRequest.idempotency_key == normalized_key).first()
+        request_row = await self.db.scalar(select(WalletCreationRequest).filter(WalletCreationRequest.idempotency_key == normalized_key).limit(1))
 
         if request_row:
             self.ensure_same_wallet_creation_request(
@@ -156,7 +158,7 @@ class ToroForgeWalletService:
                 dso_id=dso_id,
                 username=normalized_username
             )
-            return self.resolve_existing_wallet_creation_request(request_row=request_row)
+            return await self.resolve_existing_wallet_creation_request(request_row=request_row)
         
         request_row = WalletCreationRequest(
             idempotency_key = normalized_key,
@@ -172,13 +174,13 @@ class ToroForgeWalletService:
         self.db.add(request_row)
 
         try:
-            self.db.commit()
-            self.db.refresh(request_row)
+            await self.db.commit()
+            await self.db.refresh(request_row)
 
         except IntegrityError:
-            self.db.rollback()
+            await self.db.rollback()
             request_row = (
-                self.db.query(WalletCreationRequest).filter(WalletCreationRequest.idempotency_key== normalized_key).first()
+                await self.db.scalar(select(WalletCreationRequest).filter(WalletCreationRequest.idempotency_key== normalized_key).limit(1))
             )
             if not request_row:
                 raise ToroForgeWalletCreationError(
@@ -193,7 +195,7 @@ class ToroForgeWalletService:
                 dso_id= dso_id,
                 username= normalized_username
             )
-            return self.resolve_existing_wallet_creation_request(request_row=request_row)
+            return await self.resolve_existing_wallet_creation_request(request_row=request_row)
         
         try:
             result = await self.create_and_provision_wallet(
@@ -206,7 +208,7 @@ class ToroForgeWalletService:
         except Exception as exc:
             request_row.status = WalletCreationRequestStatus.FAILED
             request_row.failure_reason = str(exc)
-            self.commit_wallet_creation_request(
+            await self.commit_wallet_creation_request(
                 request_row,
                 action="saving failed wallet creation request",
                 log_ctx={
@@ -221,7 +223,7 @@ class ToroForgeWalletService:
         request_row.status = WalletCreationRequestStatus.SUCCEEDED
         request_row.wallet_id = result.wallet_id
         request_row.failure_reason = None
-        self.commit_wallet_creation_request(
+        await self.commit_wallet_creation_request(
             request_row,
             action="saving successful wallet creation request",
             log_ctx={
@@ -261,12 +263,12 @@ class ToroForgeWalletService:
             extra=log_ctx,
         )
 
-        wallet_query = self.db.query(Wallet).filter(Wallet.wallet_type == wallet_type)
+        wallet_query = select(Wallet).where(Wallet.wallet_type == wallet_type)
 
         if wallet_type == WalletType.CLINIC:
-            wallet_query = wallet_query.filter(Wallet.clinic_id == clinic_id)
+            wallet_query = wallet_query.where(Wallet.clinic_id == clinic_id)
         elif wallet_type == WalletType.DSO_TREASURY:
-            wallet_query = wallet_query.filter(Wallet.dso_id == dso_id)
+            wallet_query = wallet_query.where(Wallet.dso_id == dso_id)
         else:
             logger.error(
                 "ToroForge wallet provisioning failed: unsupported wallet type",
@@ -274,7 +276,7 @@ class ToroForgeWalletService:
             )
             raise ToroForgeWalletCreationError(f"Unsupported wallet type: {wallet_type}")
         
-        wallet = wallet_query.with_for_update().populate_existing().first()
+        wallet = await self.db.scalar(wallet_query.with_for_update().execution_options(populate_existing=True).limit(1))
 
         if wallet and wallet.status == WalletStatus.ACTIVE and wallet.external_wallet_address:
             logger.warning(
@@ -299,7 +301,7 @@ class ToroForgeWalletService:
                 auto_debit_enabled = True 
             )
             self.db.add(wallet)
-            self.commit_wallet(
+            await self.commit_wallet(
                 wallet,
                 action= "creating local pending row",
                 log_ctx = log_ctx,
@@ -312,7 +314,7 @@ class ToroForgeWalletService:
         else:
             wallet.status = WalletStatus.PENDING
             wallet.failure_reason = None
-            self.commit_wallet(
+            await self.commit_wallet(
                 wallet,
                 action= "resetting existing wallet row to pending",
                 log_ctx={**log_ctx, "wallet_id": str(wallet.id)}
@@ -327,7 +329,7 @@ class ToroForgeWalletService:
         external_address = wallet.external_wallet_address
         wallet.external_wallet_username = normalized_username
         wallet.external_wallet_password_encrypted = encrypted_password
-        self.commit_wallet(wallet, action="persisting provisioning credentials", log_ctx=log_ctx)
+        await self.commit_wallet(wallet, action="persisting provisioning credentials", log_ctx=log_ctx)
 
         try:
             logger.info(
@@ -352,8 +354,8 @@ class ToroForgeWalletService:
                     request={"username": normalized_username}, secrets={"password": generated_password}, call=create_key)
                 external_address = result["address"]
                 wallet.external_wallet_address = external_address
-                self.operations.mark_applied(key)
-                self.commit_wallet(wallet, action="saving external address before TNS", log_ctx=log_ctx)
+                await self.operations.mark_applied(key)
+                await self.commit_wallet(wallet, action="saving external address before TNS", log_ctx=log_ctx)
 
             logger.info(
                 "ToroForge keystore created",
@@ -378,16 +380,16 @@ class ToroForgeWalletService:
                 return {"address": external_address, "username": normalized_username}
 
             name_key = f"wallet-tns:{wallet.id}"
-            pending_name = self.operations.get(name_key)
+            pending_name = await self.operations.get(name_key)
             if pending_name and pending_name.state in {"in_flight", "uncertain"}:
                 resolved = await self.tns_client.get_address_for_name(username=normalized_username)
                 if (resolved or "").lower() != external_address.lower():
                     raise ReconciliationRequired("Wallet naming requires reconciliation")
-                self.operations.confirm_from_verified_read(name_key, {"address": external_address, "username": normalized_username})
+                await self.operations.confirm_from_verified_read(name_key, {"address": external_address, "username": normalized_username})
             await self.operations.execute(key=name_key, resource_id=wallet.id, action="wallet_tns",
                 request={"address": external_address, "username": normalized_username}, call=set_name)
-            self.operations.mark_applied(name_key)
-            self.commit_wallet(wallet, action="saving confirmed TNS registration", log_ctx=log_ctx)
+            await self.operations.mark_applied(name_key)
+            await self.commit_wallet(wallet, action="saving confirmed TNS registration", log_ctx=log_ctx)
 
             logger.info(
                 "ToroForge TNS setname completed",
@@ -431,7 +433,7 @@ class ToroForgeWalletService:
                 )
 
         except ToroForgeDuplicateNameError:
-            self.mark_wallet_failed(
+            await self.mark_wallet_failed(
                 wallet,
                 reason = "ToroForge username is already taken",
                 external_address = external_address,
@@ -445,7 +447,7 @@ class ToroForgeWalletService:
             raise
 
         except ToroForgeValidationError as exc:
-            self.mark_wallet_failed(
+            await self.mark_wallet_failed(
                 wallet,
                 reason=str(exc),
                 external_address=external_address,
@@ -463,7 +465,7 @@ class ToroForgeWalletService:
             raise
 
         except Exception as exc :
-            self.mark_wallet_failed(
+            await self.mark_wallet_failed(
                 wallet,
                 reason=str(exc),
                 external_address=external_address,
@@ -487,7 +489,7 @@ class ToroForgeWalletService:
         wallet.failure_reason = None
 
 
-        self.commit_wallet(
+        await self.commit_wallet(
             wallet,
             action="saving successful ToroForge wallet provisioning",
             log_ctx={
@@ -599,7 +601,7 @@ class ToroForgeWalletService:
 
 
 
-    def resolve_existing_wallet_creation_request(
+    async def resolve_existing_wallet_creation_request(
             self,
             *,
             request_row: WalletCreationRequest
@@ -620,7 +622,7 @@ class ToroForgeWalletService:
                 "Successful wallet creation request has no wallet reference"
             )
         
-        wallet = self.db.query(Wallet).filter(Wallet.id == request_row.wallet_id).first()
+        wallet = await self.db.scalar(select(Wallet).filter(Wallet.id == request_row.wallet_id).limit(1))
         if  not wallet:
             raise ToroForgeWalletCreationError(
                 "Wallet referenced by wallet creation request was not found"
@@ -642,7 +644,7 @@ class ToroForgeWalletService:
         )
 
 
-    def mark_wallet_failed(
+    async def mark_wallet_failed(
             self,
             wallet: Wallet,
             *,
@@ -651,7 +653,8 @@ class ToroForgeWalletService:
             encrypted_password: str | None,
             log_ctx: dict
     ) -> None:
-        
+        # A failed provider call rolls the session back, expiring the wallet row.
+        await reload_expired(self.db, wallet)
         wallet.status = WalletStatus.FAILED
         wallet.failure_reason = reason
 
@@ -661,7 +664,7 @@ class ToroForgeWalletService:
         if encrypted_password:
             wallet.external_wallet_password_encrypted = encrypted_password
 
-        self.commit_wallet(
+        await self.commit_wallet(
             wallet,
             action="persisting failed ToroForge wallet state",
             log_ctx={**log_ctx, "wallet_id": str(wallet.id), "external_wallet_address": external_address},
@@ -669,7 +672,7 @@ class ToroForgeWalletService:
 
 
 
-    def commit_wallet(
+    async def commit_wallet(
             self,
             wallet: Wallet,
             *,
@@ -681,11 +684,11 @@ class ToroForgeWalletService:
             if isinstance(wallet, Wallet):
                 record_audit(self.db,clinic_id=wallet.clinic_id,entity_type="wallet",entity_id=wallet.id,
                              action=action,details={"dso_id":str(wallet.dso_id) if wallet.dso_id else None})
-            self.db.commit()
-            self.db.refresh(wallet)
-            invalidate_billing_scope(clinic_id=wallet.clinic_id, dso_id=wallet.dso_id)
+            await self.db.commit()
+            await self.db.refresh(wallet)
+            await invalidate_billing_scope(clinic_id=wallet.clinic_id, dso_id=wallet.dso_id)
         except IntegrityError as exc:
-            self.db.rollback()
+            await self.db.rollback()
             logger.exception(
                 "ToroForge wallet database integrity error",
                 extra={**log_ctx, "action": action},
@@ -697,7 +700,7 @@ class ToroForgeWalletService:
             ) from exc
         
         except SQLAlchemyError as exc:
-            self.db.rollback()
+            await self.db.rollback()
             logger.exception(
                 "ToroForge wallet database commit failed",
                 extra={**log_ctx, "action": action},
@@ -707,7 +710,7 @@ class ToroForgeWalletService:
             ) from exc
         
 
-    def commit_wallet_creation_request(
+    async def commit_wallet_creation_request(
             self,
             request_row: WalletCreationRequest,
             *,
@@ -716,10 +719,10 @@ class ToroForgeWalletService:
     )-> None:
         
         try:
-            self.db.commit()
-            self.db.refresh(request_row)
+            await self.db.commit()
+            await self.db.refresh(request_row)
         except SQLAlchemyError as exc:
-            self.db.rollback()
+            await self.db.rollback()
             logger.exception(
                 "ToroForge wallet creation request commit failed",
                 extra={**log_ctx, "action": action},
@@ -753,10 +756,10 @@ class ToroForgeWalletService:
 
     
     async def update_wallet_password(self, *, wallet_id: UUID) -> dict:
-        wallet = self.db.query(Wallet).filter(Wallet.id == wallet_id).with_for_update().populate_existing().first()
+        wallet = await self.db.scalar(select(Wallet).filter(Wallet.id == wallet_id).with_for_update().execution_options(populate_existing=True).limit(1))
         if not wallet or not wallet.external_wallet_address or not wallet.external_wallet_password_encrypted:
             raise ToroForgeValidationError("Wallet has no issued credentials")
-        pending = self.operations.active(wallet.id, "wallet_password_rotation")
+        pending = await self.operations.active(wallet.id, "wallet_password_rotation")
         if pending:
             candidate = (decode_json_secret(pending.secrets_encrypted) or {}).get("new_password")
             if not candidate:
@@ -770,11 +773,11 @@ class ToroForgeWalletService:
                     raise ReconciliationRequired("Password rotation requires reconciliation") from exc
                 if not verified:
                     raise ReconciliationRequired("Password rotation requires reconciliation")
-                self.operations.confirm_from_verified_read(pending.operation_key, {"result": True})
-            result = decode_json_secret(self.operations.get(pending.operation_key).result_encrypted)
+                await self.operations.confirm_from_verified_read(pending.operation_key, {"result": True})
+            result = decode_json_secret((await self.operations.get(pending.operation_key)).result_encrypted)
             wallet.external_wallet_password_encrypted = encrypt_secret(candidate)
-            self.operations.mark_applied(pending.operation_key)
-            self.commit_wallet(wallet, action="recovering confirmed password rotation", log_ctx={"wallet_id": str(wallet.id)})
+            await self.operations.mark_applied(pending.operation_key)
+            await self.commit_wallet(wallet, action="recovering confirmed password rotation", log_ctx={"wallet_id": str(wallet.id)})
             return result
         old_password = decode_secret(wallet.external_wallet_password_encrypted)
         candidate = self.generate_wallet_password()
@@ -785,6 +788,6 @@ class ToroForgeWalletService:
         result = await self.operations.execute(key=key, resource_id=wallet.id, action="wallet_password_rotation",
             request={"address": wallet.external_wallet_address}, secrets={"new_password": candidate}, call=rotate)
         wallet.external_wallet_password_encrypted = encrypt_secret(candidate)
-        self.operations.mark_applied(key)
-        self.commit_wallet(wallet, action="saving rotated credentials", log_ctx={"wallet_id": str(wallet.id)})
+        await self.operations.mark_applied(key)
+        await self.commit_wallet(wallet, action="saving rotated credentials", log_ctx={"wallet_id": str(wallet.id)})
         return result

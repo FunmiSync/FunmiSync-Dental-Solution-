@@ -1,6 +1,5 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from starlette.concurrency import run_in_threadpool
 from app.controllers import health
 from app.config import settings
 from app.controllers.webhooks import webhook_config
@@ -25,6 +24,8 @@ from app.controllers.billing import toroforge_wallet_transfer
 from app.controllers.billing import toroforge_wallet_creation
 from app.controllers.billing import toroforge_billing_wallet_read
 from app.controllers.billing import toroforge_funding
+from app.controllers.errors import service_error_handler
+from app.services.errors import ServiceError
 
 
 log = logging.getLogger("uvicorn.error")
@@ -35,12 +36,13 @@ logging.basicConfig(
 
 @asynccontextmanager
 async def lifespan(application):
-    await run_in_threadpool(verify_db_on_start)
+    await verify_db_on_start()
     yield
 
 
 origins = settings.cors_origins
 app = FastAPI(lifespan=lifespan)
+app.add_exception_handler(ServiceError, service_error_handler)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -72,8 +74,8 @@ app.include_router(toroforge_wallet_transfer.router)
 app.include_router(health.router)
 
 
-def verify_db_on_start():
-    ok, msg = database.ping_db()
+async def verify_db_on_start():
+    ok, msg = await database.ping_db()
     if ok:
         log.info(msg)
     else:

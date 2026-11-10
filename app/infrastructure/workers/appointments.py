@@ -1,4 +1,7 @@
-from app.infrastructure.database import SessionLocal
+from contextlib import AsyncExitStack
+from sqlalchemy import select
+from app.infrastructure.database import worker_session
+from app.infrastructure.queue import async_redis
 from app.models.entities import Patients, RegisteredClinics, InboundEvent, AppointmentSyncLog, Appointments, SyncFailureSource
 from app.infrastructure.providers.opendental import openDentalApi, OpenDentalAuthError, OpenDentalUnavailableError, OpenDentalRequestError
 from fastapi import HTTPException
@@ -21,25 +24,25 @@ from app.security.encryption import decode_json_secret
 logger = logging.getLogger(__name__)
 
 
-def _mark_event_processing(db, current_job_id: str | None):
+async def _mark_event_processing(db, current_job_id: str | None):
     if not current_job_id:
         return None
 
-    event = db.query(InboundEvent).filter(InboundEvent.job_id == current_job_id).first()
+    event = await db.scalar(select(InboundEvent).where(InboundEvent.job_id == current_job_id).limit(1))
     if event:
         event.attempt_count += 1
         event.processing_status = "processing"
         event.failure_reason = None
         event.processed_at = None
-        db.commit()
+        await db.commit()
     return event
 
 
-def _mark_event_result(db, current_job_id: str | None, job, *, status: str, failure_reason: str | None = None):
+async def _mark_event_result(db, current_job_id: str | None, job, *, status: str, failure_reason: str | None = None):
     if not current_job_id:
         return
 
-    event = db.query(InboundEvent).filter(InboundEvent.job_id == current_job_id).first()
+    event = await db.scalar(select(InboundEvent).where(InboundEvent.job_id == current_job_id).limit(1))
     if not event:
         return
 
@@ -47,13 +50,13 @@ def _mark_event_result(db, current_job_id: str | None, job, *, status: str, fail
     event.failure_reason = failure_reason
     if status in {"processed", "failed"}:
         event.processed_at = datetime.now(timezone.utc)
-    db.commit()
+    await db.commit()
 
 
-def _mark_event_retry_or_failure(db, current_job_id: str | None, job, error: Exception):
+async def _mark_event_retry_or_failure(db, current_job_id: str | None, job, error: Exception):
     retries_left = job.retries_left if job else None
     status = "retrying" if retries_left and retries_left > 0 else "failed"
-    _mark_event_result(
+    await _mark_event_result(
         db,
         current_job_id,
         job,
@@ -61,13 +64,13 @@ def _mark_event_retry_or_failure(db, current_job_id: str | None, job, error: Exc
         failure_reason=str(error),
     )
 
-def _mark_sync_log_retry_or_failure(sync_log_service: AppointmentSyncLogService, sync_log: AppointmentSyncLog | None, job, error: Exception, *, failure_source: SyncFailureSource, operation: str| None = None) -> None:
+async def _mark_sync_log_retry_or_failure(sync_log_service: AppointmentSyncLogService, sync_log: AppointmentSyncLog | None, job, error: Exception, *, failure_source: SyncFailureSource, operation: str| None = None) -> None:
     if not sync_log:
         return
 
     should_retry = bool(job and job.retries_left and job.retries_left > 0)
 
-    sync_log_service.mark_failure(
+    await sync_log_service.mark_failure(
         sync_log,
         reason=str(error),
         should_retry=should_retry,
@@ -78,7 +81,16 @@ def _mark_sync_log_retry_or_failure(sync_log_service: AppointmentSyncLogService,
 
 
 def process_crm_load_job(clinic_id : UUID, crm_type: str, payload: dict, sync_log_id: UUID):
-    return asyncio.run(process_crm_load(clinic_id, crm_type, payload, sync_log_id))
+    return asyncio.run(_run_job(clinic_id, crm_type, payload, sync_log_id))
+
+
+async def _run_job(clinic_id: UUID, crm_type: str, payload: dict, sync_log_id: UUID):
+    try:
+        return await process_crm_load(clinic_id, crm_type, payload, sync_log_id)
+    finally:
+        # asyncio.run closes this loop after the job; drop Redis connections bound to it
+        # so a worker that runs several jobs in one process never reuses a dead socket.
+        await async_redis.connection_pool.disconnect()
 
 
 async def process_crm_load(clinic_id: UUID, crm_type: str, payload: dict, sync_log_id: UUID):
@@ -86,19 +98,22 @@ async def process_crm_load(clinic_id: UUID, crm_type: str, payload: dict, sync_l
         payload = decode_json_secret(payload["encrypted_payload"])
         if not isinstance(payload, dict):
             raise ValueError("Invalid encrypted job payload")
-    db = SessionLocal()
-    lock = None
+    async with worker_session() as db, AsyncExitStack() as held_locks:
+        return await _process_with_session(db, held_locks, clinic_id, crm_type, payload, sync_log_id)
+
+
+async def _process_with_session(db, held_locks: AsyncExitStack, clinic_id: UUID, crm_type: str, payload: dict, sync_log_id: UUID):
     job = get_current_job()
     current_job_id = job.id if job else None 
 
     sync_log_service= AppointmentSyncLogService(db)
     try:
-        sync_log = db.query(AppointmentSyncLog).filter_by(id = sync_log_id).first()
+        sync_log = await db.scalar(select(AppointmentSyncLog).filter_by(id=sync_log_id).limit(1))
         if not sync_log:
             raise ValueError("Sync log not found for queued job")
-        _mark_event_processing(db, current_job_id)
+        await _mark_event_processing(db, current_job_id)
         if sync_log:
-            sync_log_service.mark_processing(sync_log)
+            await sync_log_service.mark_processing(sync_log)
 
         logger.info("CRM job started", extra={
             "clinic_id": clinic_id,
@@ -107,21 +122,19 @@ async def process_crm_load(clinic_id: UUID, crm_type: str, payload: dict, sync_l
             "contact_ref": fingerprint_value(payload.get("contact_id")),
         })
 
-        clinic = db.query(RegisteredClinics).filter_by(id=clinic_id).first()
+        clinic = await db.scalar(select(RegisteredClinics).filter_by(id=clinic_id).limit(1))
         if not clinic:
             raise ValueError("clinic id  {clinic} not found ")
         if clinic.is_disabled:
             # A disabled clinic is an intentional stop, not a retryable or billable failure.
-            _mark_event_result(db, current_job_id, job, status="failed", failure_reason="Clinic is disabled")
-            sync_log_service.mark_failure(
+            await _mark_event_result(db, current_job_id, job, status="failed", failure_reason="Clinic is disabled")
+            await sync_log_service.mark_failure(
                 sync_log, reason="Clinic is disabled", should_retry=False, operation=None,
                 failure_source=SyncFailureSource.CUSTOMER_CONFIGURATION, billable=False,
             )
             return {"status": "skipped", "reason": "Clinic is disabled"}
 
-        pending_lock = clinic_sync_lock(db, clinic_id)
-        pending_lock.__enter__()
-        lock = pending_lock
+        await held_locks.enter_async_context(clinic_sync_lock(db, clinic_id))
 
         clinic_timezone = clinic.clinic_timezone
         
@@ -157,7 +170,7 @@ async def process_crm_load(clinic_id: UUID, crm_type: str, payload: dict, sync_l
 
 
 
-        od = openDentalApi(clinic_id)
+        od = openDentalApi(clinic)
         pat = PatientService(db, od, clinic_id)
         result = await pat.resolve_patnum(pat=patient_data, contact_id=contact_id)
         if result is None:
@@ -216,15 +229,15 @@ async def process_crm_load(clinic_id: UUID, crm_type: str, payload: dict, sync_l
         })
 
         #Fill the inbound event table and also the sync_log table on success
-        _mark_event_result(db, current_job_id, job, status="processed")
-        appointment_row = db.query(Appointments).filter_by(clinic_id = clinic_id, event_id= event_id).first()
+        await _mark_event_result(db, current_job_id, job, status="processed")
+        appointment_row = await db.scalar(select(Appointments).filter_by(clinic_id=clinic_id, event_id=event_id).limit(1))
         appointment_id = appointment_row.id if appointment_row else None
         if sync_log:
-            sync_log_service.mark_success(sync_log, reason="Created in opendental Successfully", operation= booking.action, appointment_id= appointment_id,  pat_id=pat_id, apt_num=apt_num)
+            await sync_log_service.mark_success(sync_log, reason="Created in opendental Successfully", operation= booking.action, appointment_id= appointment_id,  pat_id=pat_id, apt_num=apt_num)
             
 
     except CircuitBreakerOpenError as e:
-        db.rollback()
+        await db.rollback()
         logger.warning(
             "Too many failures; circuit breaker is open",
             extra={
@@ -234,14 +247,14 @@ async def process_crm_load(clinic_id: UUID, crm_type: str, payload: dict, sync_l
                 "contact_ref": fingerprint_value(payload.get("contact_id")),
             },
         )
-        _mark_event_retry_or_failure(db, current_job_id, job, e)
-        sync_log = db.query(AppointmentSyncLog).filter_by(id=sync_log_id).first()
-        _mark_sync_log_retry_or_failure(sync_log_service, sync_log, job, e, failure_source = SyncFailureSource.OPEN_DENTAL )
+        await _mark_event_retry_or_failure(db, current_job_id, job, e)
+        sync_log = await db.scalar(select(AppointmentSyncLog).filter_by(id=sync_log_id).limit(1))
+        await _mark_sync_log_retry_or_failure(sync_log_service, sync_log, job, e, failure_source = SyncFailureSource.OPEN_DENTAL )
         raise ValueError("Opendental is down please try again later")
 
 
     except (CustomerConfigurationSyncError, OpenDentalAuthError, OpenDentalRequestError) as e:
-        db.rollback()
+        await db.rollback()
         logger.warning(
             "Customer configuration caused sync failure",
             extra={
@@ -251,10 +264,10 @@ async def process_crm_load(clinic_id: UUID, crm_type: str, payload: dict, sync_l
                 "contact_ref": fingerprint_value(payload.get("contact_id")),
             },
         )
-        _mark_event_result(db, current_job_id, job, status="failed", failure_reason=str(e))
-        sync_log = db.query(AppointmentSyncLog).filter_by(id=sync_log_id).first()
+        await _mark_event_result(db, current_job_id, job, status="failed", failure_reason=str(e))
+        sync_log = await db.scalar(select(AppointmentSyncLog).filter_by(id=sync_log_id).limit(1))
         if sync_log:
-            sync_log_service.mark_failure(
+            await sync_log_service.mark_failure(
                 sync_log,
                 reason=str(e),
                 should_retry=False,
@@ -264,7 +277,7 @@ async def process_crm_load(clinic_id: UUID, crm_type: str, payload: dict, sync_l
         raise
 
     except (OpenDentalSyncError, OpenDentalUnavailableError) as e:
-        db.rollback()
+        await db.rollback()
         logger.warning(
             "OpenDental caused sync failure",
             extra={
@@ -274,9 +287,9 @@ async def process_crm_load(clinic_id: UUID, crm_type: str, payload: dict, sync_l
                 "contact_ref": fingerprint_value(payload.get("contact_id")),
             },
         )
-        _mark_event_retry_or_failure(db, current_job_id, job, e)
-        sync_log = db.query(AppointmentSyncLog).filter_by(id=sync_log_id).first()
-        _mark_sync_log_retry_or_failure(
+        await _mark_event_retry_or_failure(db, current_job_id, job, e)
+        sync_log = await db.scalar(select(AppointmentSyncLog).filter_by(id=sync_log_id).limit(1))
+        await _mark_sync_log_retry_or_failure(
             sync_log_service,
             sync_log,
             job,
@@ -286,7 +299,7 @@ async def process_crm_load(clinic_id: UUID, crm_type: str, payload: dict, sync_l
         raise
 
     except InternalSyncError as e:
-        db.rollback()
+        await db.rollback()
         logger.exception(
             "Internal sync processing failure",
             extra={
@@ -296,9 +309,9 @@ async def process_crm_load(clinic_id: UUID, crm_type: str, payload: dict, sync_l
                 "contact_ref": fingerprint_value(payload.get("contact_id")),
             },
         )
-        _mark_event_retry_or_failure(db, current_job_id, job, e)
-        sync_log = db.query(AppointmentSyncLog).filter_by(id=sync_log_id).first()
-        _mark_sync_log_retry_or_failure(
+        await _mark_event_retry_or_failure(db, current_job_id, job, e)
+        sync_log = await db.scalar(select(AppointmentSyncLog).filter_by(id=sync_log_id).limit(1))
+        await _mark_sync_log_retry_or_failure(
             sync_log_service,
             sync_log,
             job,
@@ -308,7 +321,7 @@ async def process_crm_load(clinic_id: UUID, crm_type: str, payload: dict, sync_l
         raise
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.exception(
             f"Error processing patient: {e}",
             extra={
@@ -318,13 +331,13 @@ async def process_crm_load(clinic_id: UUID, crm_type: str, payload: dict, sync_l
                 "contact_ref": fingerprint_value(payload.get("contact_id")),
             },
         )
-        _mark_event_retry_or_failure(db, current_job_id, job, e)
-        sync_log = db.query(AppointmentSyncLog).filter_by(id=sync_log_id).first()
-        _mark_sync_log_retry_or_failure(sync_log_service, sync_log, job, e, failure_source= SyncFailureSource.INTERNAL)
+        await _mark_event_retry_or_failure(db, current_job_id, job, e)
+        sync_log = await db.scalar(select(AppointmentSyncLog).filter_by(id=sync_log_id).limit(1))
+        await _mark_sync_log_retry_or_failure(sync_log_service, sync_log, job, e, failure_source= SyncFailureSource.INTERNAL)
         raise HTTPException(status_code=500, detail="Database error occurred")
 
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.exception(
             "Unexpected error while processing CRM load",
             extra={
@@ -334,14 +347,8 @@ async def process_crm_load(clinic_id: UUID, crm_type: str, payload: dict, sync_l
                 "contact_ref": fingerprint_value(payload.get("contact_id")),
             },
         )
-        _mark_event_retry_or_failure(db, current_job_id, job, e)
-        sync_log = db.query(AppointmentSyncLog).filter_by(id=sync_log_id).first()
-        _mark_sync_log_retry_or_failure(sync_log_service, sync_log, job, e, failure_source= SyncFailureSource.UNKNOWN)
+        await _mark_event_retry_or_failure(db, current_job_id, job, e)
+        sync_log = await db.scalar(select(AppointmentSyncLog).filter_by(id=sync_log_id).limit(1))
+        await _mark_sync_log_retry_or_failure(sync_log_service, sync_log, job, e, failure_source= SyncFailureSource.UNKNOWN)
         raise
 
-    finally:
-        try:
-            if lock is not None:
-                lock.__exit__(None, None, None)
-        finally:
-            db.close()

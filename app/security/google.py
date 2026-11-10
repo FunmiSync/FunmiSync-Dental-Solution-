@@ -3,6 +3,7 @@ import logging
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 from app.config import settings
+from starlette.concurrency import run_in_threadpool
 
 
 logger = logging.getLogger(__name__)
@@ -10,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 CLIENT_ID = settings.google_client_id
 
-def verify_google_credentials(credential: str) -> dict:
+def _verify_google_credentials_sync(credential: str) -> dict:
     try:
         idinfo= id_token.verify_oauth2_token(
             credential,
@@ -64,3 +65,8 @@ def verify_google_credentials(credential: str) -> dict:
         "email": str(email).strip().lower(),
         "name": str(name or "").strip(),
     }
+
+
+async def verify_google_credentials(credential: str) -> dict:
+    # google-auth fetches Google's signing certificates over blocking HTTP.
+    return await run_in_threadpool(_verify_google_credentials_sync, credential)

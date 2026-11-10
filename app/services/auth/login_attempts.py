@@ -1,16 +1,20 @@
-from app.infrastructure.queue import async_redis
-from fastapi import HTTPException, status, Request
-from  redis.exceptions import RedisError
 import logging
+from typing import NoReturn
+
+from fastapi import Request
+from redis.exceptions import RedisError
+
+from app.infrastructure.queue import async_redis
 from app.infrastructure.rate_counter import increment_window
 from app.security.encryption import hash_lookup
+from app.services.errors import AuthenticationFailed, TooManyRequests
 
 logger = logging.getLogger(__name__)
 
 MAX_LOGIN_ATTEMPTS = 5 
 LOCK_WINDOWS_SECONDS = 30 * 60 
 
-async def login_attempts(email : str , ip: str ):
+def login_attempts(email: str, ip: str) -> str:
     return f"login-attempts:{hash_lookup(email.strip().lower() + ':' + ip)}"
 
 async def get_redis_attempts(key) -> int:
@@ -29,11 +33,11 @@ async def increment_attempts_with_key(key):
         return 0
 
 
-async def  handle_failed_login(key):
+async def handle_failed_login(key) -> NoReturn:
     new_attempt = await increment_attempts_with_key(key)
     if new_attempt >= MAX_LOGIN_ATTEMPTS:
-        raise HTTPException( status.HTTP_429_TOO_MANY_REQUESTS, detail= "Too many login attempt please Try again Later")
-    raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail = "Invalid Email or Password ")
+        raise TooManyRequests("Too many login attempt please Try again Later")
+    raise AuthenticationFailed("Invalid Email or Password ")
 
 
 async def clear_attempts_with_key(key):
@@ -47,10 +51,6 @@ def get_client_ip(request: Request):
     if request.client is not None:
         return request.client.host
     return "unknown"
-    
-
-
-
 
 
 

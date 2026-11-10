@@ -3,9 +3,9 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
-from sqlalchemy import or_
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.infrastructure.providers.toroforge.exceptions import ToroForgeError, ToroForgeValidationError
 from app.infrastructure.providers.toroforge.payment_client import ToroForgePaymentClient
 from app.models.entities import LedgerDirection, LedgerEntryType, LedgerStatus, PaymentProvider, PaymentTransaction, PaymentTransactionStatus, Wallet, WalletLedgerEntry, WalletStatus
@@ -22,7 +22,7 @@ from app.services.audit_logs import record_audit
 class ToroForgeFundingService:
     def __init__(
             self,
-            db:Session,
+            db: AsyncSession,
             payment_client: ToroForgePaymentClient
     ) -> None:
         
@@ -74,7 +74,7 @@ class ToroForgeFundingService:
         if normalized_payment_type not in {"card", "bank"}:
             raise ToroForgeValidationError("Unsupported payment type")
         
-        wallet = self.db.query(Wallet).filter(Wallet.id == wallet_id).with_for_update().populate_existing().first()
+        wallet = await self.db.scalar(select(Wallet).filter(Wallet.id == wallet_id).with_for_update().execution_options(populate_existing=True).limit(1))
         if not wallet:
             raise ToroForgeValidationError("Wallet not found")
         
@@ -113,11 +113,11 @@ class ToroForgeFundingService:
         logger.info("ToroForge funding initialization requested", extra=log_ctx)
 
         existing_payment = (
-            self.db.query(PaymentTransaction).filter(
+            await self.db.scalar(select(PaymentTransaction).filter(
                 PaymentTransaction.wallet_id == wallet_id,
                 or_(PaymentTransaction.idempotency_key == idempotency_key,
                     PaymentTransaction.idempotency_key == self.build_funding_idempotency_key(request_id)),
-            ).first()
+            ).limit(1))
         )
 
         if existing_payment:
@@ -125,7 +125,7 @@ class ToroForgeFundingService:
                 or existing_payment.currency != normalized_currency
                 or (existing_payment.details or {}).get("request_fingerprint") != fingerprint):
                 raise ToroForgeValidationError("Idempotency key conflicts with an existing funding request")
-            existing_ledger = self.get_ledger_for_payment(existing_payment.id)
+            existing_ledger = await self.get_ledger_for_payment(existing_payment.id)
 
             logger.info(
                 "ToroForge funding initialization reused existing payment transaction",
@@ -146,11 +146,11 @@ class ToroForgeFundingService:
                 "provider_response": self.extract_provider_response(existing_details),
             }
 
-        unresolved = self.db.query(PaymentTransaction).filter(
+        unresolved = await self.db.scalar(select(PaymentTransaction).filter(
             PaymentTransaction.wallet_id == wallet_id,
             PaymentTransaction.status == PaymentTransactionStatus.PENDING,
             PaymentTransaction.external_payment_id.is_(None),
-        ).first()
+        ).limit(1))
         if unresolved:
             raise ReconciliationRequired("A funding initialization requires reconciliation before another request")
 
@@ -207,7 +207,7 @@ class ToroForgeFundingService:
 
         self.db.add(pending_ledger)
 
-        self.commit_and_refresh(
+        await self.commit_and_refresh(
             payment,
             pending_ledger,
             action= "creating local [ending funding records",
@@ -272,7 +272,7 @@ class ToroForgeFundingService:
             }
           
 
-            self.commit_and_refresh(
+            await self.commit_and_refresh(
                 payment,
                 pending_ledger,
                 action="persisting failed funding initialization",
@@ -304,7 +304,7 @@ class ToroForgeFundingService:
         }
 
 
-        self.commit_and_refresh(
+        await self.commit_and_refresh(
             payment,
             pending_ledger,
             action = "saving providerfunding initialization response",
@@ -349,18 +349,17 @@ class ToroForgeFundingService:
             raise ToroForgeValidationError("txid is required")
         
         payment = (
-            self.db.query(PaymentTransaction)
+            await self.db.scalar(select(PaymentTransaction)
             .filter(
                 PaymentTransaction.id == payment_transaction_id,
                 PaymentTransaction.wallet_id == wallet_id,
-            )
-            .first()
+            ).limit(1))
         )
 
         if not payment:
          raise ToroForgeValidationError("Payment transaction not found")
         
-        wallet = self.db.query(Wallet).filter(Wallet.id == wallet_id).first()
+        wallet = await self.db.scalar(select(Wallet).filter(Wallet.id == wallet_id).limit(1))
 
         if not wallet:
             raise ToroForgeValidationError("Wallet not found")
@@ -402,7 +401,7 @@ class ToroForgeFundingService:
         if wallet.currency.strip().upper() != payment.currency.strip().upper():
             raise ToroForgeValidationError("Wallet currency does not match payment currency")
 
-        posted = self.record_verified_funding_success(
+        posted = await self.record_verified_funding_success(
                 payment_transaction_id=payment_transaction_id,
                 provider_response={
                     **provider_response,
@@ -473,7 +472,7 @@ class ToroForgeFundingService:
 
 
 
-    def record_verified_funding_success(
+    async def record_verified_funding_success(
             self,
             *,
             payment_transaction_id: UUID,
@@ -484,7 +483,7 @@ class ToroForgeFundingService:
         succeeded_at = succeeded_at or self.utcnow()
         try:
             payment = (
-                self.db.query(PaymentTransaction).filter(PaymentTransaction.id == payment_transaction_id).with_for_update().populate_existing().first()
+                await self.db.scalar(select(PaymentTransaction).filter(PaymentTransaction.id == payment_transaction_id).with_for_update().execution_options(populate_existing=True).limit(1))
             )
 
             if not payment:
@@ -494,13 +493,13 @@ class ToroForgeFundingService:
                 raise ToroForgeValidationError("Payment transaction has no wallet reference")
             
             wallet = (
-                self.db.query(Wallet).filter(Wallet.id == payment.wallet_id).with_for_update().populate_existing().first()
+                await self.db.scalar(select(Wallet).filter(Wallet.id == payment.wallet_id).with_for_update().execution_options(populate_existing=True).limit(1))
             ) 
 
             if not wallet:
                 raise ToroForgeValidationError("Wallet not found for payment transaction")
             
-            ledger = self.get_ledger_for_payment(payment.id, lock = True)
+            ledger = await self.get_ledger_for_payment(payment.id, lock = True)
 
             if not ledger:
                 raise ToroForgeValidationError("Pending ledger entry not found for payment transaction")
@@ -573,7 +572,7 @@ class ToroForgeFundingService:
             wallet.cached_balance_minor = new_balance_minor
             wallet.last_balance_sync_at = succeeded_at
 
-            self.commit_and_refresh(
+            await self.commit_and_refresh(
                 payment,
                 wallet,
                 ledger,
@@ -597,11 +596,11 @@ class ToroForgeFundingService:
             }
     
         except Exception:
-            self.db.rollback()
+            await self.db.rollback()
             raise
 
 
-    def record_verified_funding_failure(
+    async def record_verified_funding_failure(
             self,
             *,
             payment_transaction_id: UUID,
@@ -611,13 +610,13 @@ class ToroForgeFundingService:
         
         try:
             payment = (
-                self.db.query(PaymentTransaction).filter(PaymentTransaction.id ==payment_transaction_id).with_for_update().first()
+                await self.db.scalar(select(PaymentTransaction).filter(PaymentTransaction.id ==payment_transaction_id).with_for_update().limit(1))
             )
 
             if not payment:
                  raise ToroForgeValidationError("Payment transaction not found")
             
-            ledger = self.get_ledger_for_payment(payment.id, lock= True)
+            ledger = await self.get_ledger_for_payment(payment.id, lock= True)
         
             if not ledger:
                 raise ToroForgeValidationError("Pending ledger entry not found for payment transaction")
@@ -670,7 +669,7 @@ class ToroForgeFundingService:
             }
 
 
-            self.commit_and_refresh(
+            await self.commit_and_refresh(
                 payment,
                 ledger,
                 action="saving verified funding failure",
@@ -678,11 +677,11 @@ class ToroForgeFundingService:
             )
 
         except Exception:
-            self.db.rollback()
+            await self.db.rollback()
             raise
 
 
-    def get_ledger_for_payment(
+    async def get_ledger_for_payment(
             self,
             payment_id: UUID,
             *,
@@ -690,7 +689,7 @@ class ToroForgeFundingService:
     ) -> WalletLedgerEntry | None:
         
         query = (
-            self.db.query(WalletLedgerEntry).filter(
+            select(WalletLedgerEntry).where(
                 WalletLedgerEntry.reference_type == "payment_transaction",
                 WalletLedgerEntry.reference_id == str(payment_id),
                 WalletLedgerEntry.entry_type == LedgerEntryType.TOP_UP,
@@ -699,13 +698,13 @@ class ToroForgeFundingService:
         )
 
         if lock:
-            query = query.with_for_update().populate_existing()
+            query = query.with_for_update().execution_options(populate_existing=True)
 
-        return query.first()
+        return await self.db.scalar(query.limit(1))
     
 
 
-    def commit_and_refresh(
+    async def commit_and_refresh(
             self,
             *entities: Any,
             action: str,
@@ -717,16 +716,16 @@ class ToroForgeFundingService:
                 if isinstance(entity, PaymentTransaction):
                     record_audit(self.db,clinic_id=entity.clinic_id,entity_type="payment",entity_id=entity.id,
                                  action=entity.status.value,details={"wallet_id":str(entity.wallet_id)})
-            self.db.commit()
+            await self.db.commit()
             for entity in entities:
-                self.db.refresh(entity)
+                await self.db.refresh(entity)
             scopes = {(entity.clinic_id, entity.dso_id) for entity in entities
                       if isinstance(entity, (Wallet, PaymentTransaction))}
             for clinic_id, dso_id in scopes:
-                invalidate_billing_scope(clinic_id=clinic_id, dso_id=dso_id)
+                await invalidate_billing_scope(clinic_id=clinic_id, dso_id=dso_id)
         
         except IntegrityError as exc:
-            self.db.rollback()
+            await self.db.rollback()
             logger.exception(
                 "ToroForge funding database integrity error",
                 extra={**log_ctx, "action": action},
@@ -736,7 +735,7 @@ class ToroForgeFundingService:
             raise ToroForgeError(f"Database integrity error while {action}") from exc
         
         except SQLAlchemyError as exc:
-            self.db.rollback()
+            await self.db.rollback()
             logger.exception(
                 "ToroForge funding database commit failed",
                 extra={**log_ctx, "action": action},

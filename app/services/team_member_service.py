@@ -2,14 +2,15 @@ import logging
 from datetime import datetime, timezone
 from typing import cast
 from uuid import UUID
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.entities import RoleAssignment, ScopeType, Users
 from app.schemas.api import team_member_list_out, team_member_row_out
 from app.infrastructure.cache.team_member_cache import TEAM_MEMBERS_TTL_SECONDS, cache_get_json, cache_set_json, clinic_team_members_cache_key, dso_team_members_cache_key
 
 
 
-logger = logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 
@@ -23,14 +24,14 @@ def to_member_row(*, assignment: RoleAssignment, user: Users)-> team_member_row_
     )
 
 
-def build_dso_team_members_cached(
-        db: Session,
+async def build_dso_team_members_cached(
+        db: AsyncSession,
         *,
         dso_id: UUID
 )-> team_member_list_out:
 
     cache_key = dso_team_members_cache_key(dso_id=dso_id)
-    cached = cache_get_json(cache_key)
+    cached = await cache_get_json(cache_key)
 
 
     if cached:
@@ -40,14 +41,14 @@ def build_dso_team_members_cached(
         )
         return team_member_list_out(**cached)
     
-    rows = (
-        db.query(RoleAssignment, Users).join(Users, Users.id == RoleAssignment.user_id).filter(
+    rows = (await db.execute(
+        select(RoleAssignment, Users).join(Users, Users.id == RoleAssignment.user_id).where(
             Users.is_active.is_(True),
             RoleAssignment.is_active.is_(True),
             RoleAssignment.scope_type == ScopeType.DSO,
-            RoleAssignment.dso_id ==dso_id
-        ).order_by(RoleAssignment.created_at.asc()).all()
-    )
+            RoleAssignment.dso_id == dso_id
+        ).order_by(RoleAssignment.created_at.asc())
+    )).all()
 
     items =[
         to_member_row(assignment=assignment, user=user)
@@ -60,7 +61,7 @@ def build_dso_team_members_cached(
         items= items
     )
 
-    cache_set_json(
+    await cache_set_json(
         cache_key,
         response.model_dump(mode="json"),
         TEAM_MEMBERS_TTL_SECONDS
@@ -71,14 +72,14 @@ def build_dso_team_members_cached(
 
 
 
-def build_clinic_team_members_cached(
-        db: Session,
+async def build_clinic_team_members_cached(
+        db: AsyncSession,
         *,
         clinic_id: UUID,
 ) -> team_member_list_out:
     
     cache_key = clinic_team_members_cache_key(clinic_id= clinic_id)
-    cached = cache_get_json(cache_key)
+    cached = await cache_get_json(cache_key)
 
     if cached:
         logger.info(
@@ -87,14 +88,14 @@ def build_clinic_team_members_cached(
         )
         return team_member_list_out(**cached)
     
-    rows = (
-        db.query(RoleAssignment, Users).join(Users, Users.id == RoleAssignment.user_id).filter(
+    rows = (await db.execute(
+        select(RoleAssignment, Users).join(Users, Users.id == RoleAssignment.user_id).where(
             Users.is_active.is_(True),
             RoleAssignment.is_active.is_(True),
             RoleAssignment.scope_type == ScopeType.CLINIC,
             RoleAssignment.clinic_id == clinic_id,
-        ).order_by(RoleAssignment.created_at.asc()).all()
-    )
+        ).order_by(RoleAssignment.created_at.asc())
+    )).all()
 
 
     items = [
@@ -108,7 +109,7 @@ def build_clinic_team_members_cached(
         items=items,
     )
 
-    cache_set_json(
+    await cache_set_json(
         cache_key,
         response.model_dump(mode="json"),
         TEAM_MEMBERS_TTL_SECONDS,

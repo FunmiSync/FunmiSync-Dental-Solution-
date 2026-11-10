@@ -1,9 +1,8 @@
 from app.security.encryption import hash_lookup
-from app.infrastructure.cache.resilience import optional_cache, encode_cache_payload, decode_cache_payload
-import json 
+from app.infrastructure.cache.resilience import decode_cached_text, encode_cache_payload, optional_cache
 from datetime import date, datetime, timezone
 from uuid import UUID
-from app.infrastructure.queue import redis_client
+from app.infrastructure.queue import async_redis
 
 
 
@@ -89,28 +88,18 @@ def page_cache_key(
     )
 
 @optional_cache
-def cache_get_json(key: str)-> dict | None:
-    raw = redis_client.get(key)
-    if not raw:
-        return None
-
-    if isinstance(raw, (bytes, bytearray)):
-        raw_text = raw.decode("utf-8")
-    elif isinstance(raw, str):
-        raw_text = raw
-    else:
-        return None
-
-    return decode_cache_payload(raw_text)
-
-@optional_cache
-def cache_set_json(key: str, payload:dict, ttl_seconds:int)-> None:
-    redis_client.setex(key, ttl_seconds, encode_cache_payload(payload))
+async def cache_get_json(key: str) -> dict | None:
+    return decode_cached_text(await async_redis.get(key))
 
 
 @optional_cache
-def invalidate_hot_sync_log_cache(*, dso_id:UUID | None, clinic_id: UUID)-> None:
-    patterns =[
+async def cache_set_json(key: str, payload: dict, ttl_seconds: int) -> None:
+    await async_redis.setex(key, ttl_seconds, encode_cache_payload(payload))
+
+
+@optional_cache
+async def invalidate_hot_sync_log_cache(*, dso_id: UUID | None, clinic_id: UUID) -> None:
+    patterns = [
         f"sync_logs:summary:clinic:{clinic_id}:*",
         f"sync_logs:page:clinic:{clinic_id}:*",
         f"sync_logs: page:clinic:{clinic_id}:*",  # expire pre-fix cache keys too
@@ -124,7 +113,7 @@ def invalidate_hot_sync_log_cache(*, dso_id:UUID | None, clinic_id: UUID)-> None
                 f"sync_logs: page:dso:{dso_id}:*",
             ]
         )
-    
+
     for pattern in patterns:
-        for key in redis_client.scan_iter(match=pattern):
-            redis_client.delete(key)
+        async for key in async_redis.scan_iter(match=pattern):
+            await async_redis.delete(key)

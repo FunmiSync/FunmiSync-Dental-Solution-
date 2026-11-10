@@ -4,7 +4,8 @@ from jose import jwt, JWTError
 from passlib.context import CryptContext
 from app.config import settings
 from app.models.entities import Users
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Depends, HTTPException, status, Response, Request
 from app.infrastructure.database import get_db
 import logging
@@ -68,7 +69,7 @@ def parse_uuid(value: str) -> uuid.UUID:
     except (ValueError, TypeError) as e:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid Token") from e
     
-def  get_current_user(token: str = Depends(oauth2_scheme), db:Session = Depends(get_db)): 
+async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
     try:
         payload = decode_token(token)
     except ValueError as  e :
@@ -87,7 +88,7 @@ def  get_current_user(token: str = Depends(oauth2_scheme), db:Session = Depends(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail = "invalid Token")
     
     user_uuid = parse_uuid(user_id)
-    user = db.query(Users).filter(Users.id == user_uuid).first()
+    user = await db.get(Users, user_uuid)
     if not user:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail = "Invalid Token")
     
@@ -109,17 +110,17 @@ def get_stream_token_from_request(request: Request)-> str | None:
     return request.cookies.get(STREAM_ACCESS_COOKIE_NAME)
 
 
-def get_current_user_for_stream(request: Request, db:Session = Depends(get_db)):
+async def get_current_user_for_stream(request: Request, db: AsyncSession = Depends(get_db)):
     token = get_stream_token_from_request(request)
     if not token:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Missing stream token")
     
-    return get_current_user(token, db)
+    return await get_current_user(token, db)
 
 
 
 
-def validate_refresh_token(refresh_token: str , db: Session):
+async def validate_refresh_token(refresh_token: str, db: AsyncSession):
     try:
         payload = decode_token(refresh_token)
     except ValueError as e :
@@ -139,7 +140,9 @@ def validate_refresh_token(refresh_token: str , db: Session):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail = "invalid Token")
     
     user_uuid = parse_uuid(user_id)
-    user = db.query(Users).filter(Users.id == user_uuid).with_for_update().populate_existing().first()
+    # Lock the user row so two concurrent refreshes cannot both rotate the same token.
+    user = await db.scalar(select(Users).where(Users.id == user_uuid).with_for_update()
+                           .execution_options(populate_existing=True).limit(1))
 
     if not user:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail = "Invalid Token")

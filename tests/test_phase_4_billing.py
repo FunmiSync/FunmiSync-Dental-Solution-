@@ -14,7 +14,8 @@ from app.services.billing.funding_service import ToroForgeFundingService
 from app.services.external_operations import ExternalOperations, ReconciliationRequired, DefinitiveRejection
 from app.models.entities import ExternalOperation, Wallet, WalletType, WalletStatus, RegisteredClinics, WalletTransfer, WalletTransferStatus
 from app.security.encryption import encrypt_secret, decode_json_secret
-from local_database import local_session
+from sqlalchemy import func, select
+from local_database import close_local_session, fake_async_session, local_session
 
 _guard = None
 def setUpModule():
@@ -44,7 +45,7 @@ class MoneySafetyTests(unittest.TestCase):
 
 class FundingSafetyTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.db = MagicMock()
+        self.db = fake_async_session()
         self.provider = MagicMock()
         self.provider.initialize_payment = AsyncMock()
         self.service = ToroForgeFundingService(self.db, self.provider)
@@ -52,7 +53,7 @@ class FundingSafetyTests(unittest.IsolatedAsyncioTestCase):
         self.wallet = SimpleNamespace(id=uuid4(), external_wallet_address="0xabc", currency="USD")
 
     async def test_currency_mismatch_is_rejected_before_provider(self):
-        self.db.query.return_value.filter.return_value.with_for_update.return_value.populate_existing.return_value.first.return_value = SimpleNamespace(
+        self.db.scalar.return_value = SimpleNamespace(
             id=self.wallet.id, currency="USD", status=__import__('app.models.entities',fromlist=['WalletStatus']).WalletStatus.ACTIVE,
             external_wallet_address="0xabc", kyc_verified=True)
         with self.assertRaises(ToroForgeValidationError):
@@ -78,13 +79,13 @@ class FundingSafetyTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ExternalOperationTests(unittest.IsolatedAsyncioTestCase):
-    def setUp(self):
-        self.db, self.engine = local_session()
+    async def asyncSetUp(self):
+        self.db, self.engine = await local_session()
         self.service = ExternalOperations(self.db)
         self.resource = uuid4()
 
-    def tearDown(self):
-        self.db.close(); self.engine.dispose()
+    async def asyncTearDown(self):
+        await close_local_session(self.db, self.engine)
 
     async def execute(self, call, key="operation", request=None):
         return await self.service.execute(key=key, resource_id=self.resource, action="test",
@@ -92,21 +93,21 @@ class ExternalOperationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_intent_committed_before_provider_and_result_reused(self):
         async def provider():
-            self.assertEqual(self.service.get("operation").state, "in_flight")
+            self.assertEqual((await self.service.get("operation")).state, "in_flight")
             self.assertFalse(self.db.new)
             return {"result":True, "private_result":"sensitive"}
         call = AsyncMock(side_effect=provider)
         await self.execute(call)
         await self.execute(call)
         call.assert_awaited_once()
-        row = self.service.get("operation")
+        row = await self.service.get("operation")
         self.assertNotIn("private", row.secrets_encrypted)
         self.assertNotIn("sensitive", row.result_encrypted)
 
     async def test_timeout_and_new_keys_do_not_replay(self):
         call = AsyncMock(side_effect=TimeoutError("uncertain"))
         with self.assertRaises(TimeoutError): await self.execute(call)
-        self.assertEqual(self.service.get("operation").state, "uncertain")
+        self.assertEqual((await self.service.get("operation")).state, "uncertain")
         for key in ("operation", "another"):
             with self.assertRaises(ReconciliationRequired): await self.execute(call, key)
         call.assert_awaited_once()
@@ -120,15 +121,15 @@ class ExternalOperationTests(unittest.IsolatedAsyncioTestCase):
     async def test_explicit_rejection_allows_new_operation_but_not_old_key(self):
         with self.assertRaises(DefinitiveRejection):
             await self.execute(AsyncMock(side_effect=DefinitiveRejection("rejected")))
-        self.assertEqual(self.service.get("operation").state, "failed")
+        self.assertEqual((await self.service.get("operation")).state, "failed")
         call = AsyncMock(return_value={"ok":True})
         await self.execute(call, key="another")
         call.assert_awaited_once()
 
 
 class DurableTransferTests(unittest.IsolatedAsyncioTestCase):
-    def setUp(self):
-        self.db, self.engine = local_session()
+    async def asyncSetUp(self):
+        self.db, self.engine = await local_session()
         self.dso_id, self.clinic_id = uuid4(), uuid4()
         self.db.add(RegisteredClinics(id=self.clinic_id, crm_type="ghl", clinic_name="Test",clinic_number=1,
             clinic_timezone="UTC", od_developer_key="unused", od_customer_key="unused", crm_api_key="unused",
@@ -137,7 +138,7 @@ class DurableTransferTests(unittest.IsolatedAsyncioTestCase):
             currency="USD",cached_balance_minor=10000,external_wallet_address="0xsender",external_wallet_password_encrypted=encrypt_secret("password"))
         self.receiver = Wallet(id=uuid4(),clinic_id=self.clinic_id,dso_id=self.dso_id,wallet_type=WalletType.CLINIC,
             status=WalletStatus.ACTIVE,currency="USD",cached_balance_minor=0,external_wallet_address="0xreceiver")
-        self.db.add_all([self.sender,self.receiver]); self.db.commit()
+        self.db.add_all([self.sender,self.receiver]); await self.db.commit()
         self.client = SimpleNamespace(make_inter_wallet_transfer=AsyncMock(return_value={"result":True,"data":[{"TX_ID":"TRANSFER1", "test_status":"settled"}]}))
         from app.config import settings
         self.settlement = patch.multiple(settings, toroforge_settlement_field="test_status",
@@ -147,8 +148,8 @@ class DurableTransferTests(unittest.IsolatedAsyncioTestCase):
         self.service = ToroForgeWalletTransferService(self.db,self.client)
         self.cache = patch("app.services.billing.wallet_transfer_service.invalidate_billing_scope");self.cache.start()
 
-    def tearDown(self):
-        self.settlement.stop();self.cache.stop();self.db.close();self.engine.dispose()
+    async def asyncTearDown(self):
+        self.settlement.stop();self.cache.stop();await close_local_session(self.db,self.engine)
 
     async def send(self,key="one",amount="25"):
         return await self.service.transfer_from_dso_to_clinic(dso_id=self.dso_id,clinic_id=self.clinic_id,amount=amount,
@@ -166,7 +167,7 @@ class DurableTransferTests(unittest.IsolatedAsyncioTestCase):
     async def test_uncertain_transfer_retains_intent_and_blocks_new_key(self):
         self.client.make_inter_wallet_transfer.side_effect = TimeoutError("unknown")
         with self.assertRaises(TimeoutError): await self.send()
-        transfer = self.db.query(WalletTransfer).one()
+        transfer = (await self.db.scalars(select(WalletTransfer))).one()
         self.assertEqual(transfer.status,WalletTransferStatus.PENDING)
         self.assertEqual((await self.send())["status"], "pending")
         with self.assertRaises(ReconciliationRequired): await self.send(key="different")
@@ -183,6 +184,7 @@ class DurableTransferTests(unittest.IsolatedAsyncioTestCase):
     async def test_acknowledgement_without_settlement_does_not_post_balances(self):
         self.client.make_inter_wallet_transfer.return_value = {"result":True,"data":[{"TX_ID":"TRANSFER1"}]}
         with self.assertRaises(ReconciliationRequired): await self.send()
+        await self.db.refresh(self.sender); await self.db.refresh(self.receiver)
         self.assertEqual(self.sender.cached_balance_minor,10000)
         self.assertEqual(self.receiver.cached_balance_minor,0)
         with self.assertRaises(ReconciliationRequired): await self.send()
@@ -190,8 +192,8 @@ class DurableTransferTests(unittest.IsolatedAsyncioTestCase):
 
 
 class WalletRecoveryTests(unittest.IsolatedAsyncioTestCase):
-    def setUp(self):
-        self.db,self.engine=local_session()
+    async def asyncSetUp(self):
+        self.db,self.engine=await local_session()
         self.keys=SimpleNamespace(create_keystore=AsyncMock(return_value="0xnew"),verify_key=AsyncMock(return_value=True),
                                   update_key_password=AsyncMock(return_value={"result":True}))
         self.tns=SimpleNamespace(assert_name_available=AsyncMock(),set_name=AsyncMock(),
@@ -200,14 +202,14 @@ class WalletRecoveryTests(unittest.IsolatedAsyncioTestCase):
         self.service=ToroForgeWalletService(self.db,self.keys,self.tns)
         self.cache=patch("app.services.billing.wallet_service.invalidate_billing_scope");self.cache.start()
         self.clinic_id=uuid4()
-    def tearDown(self):self.cache.stop();self.db.close();self.engine.dispose()
+    async def asyncTearDown(self):self.cache.stop();await close_local_session(self.db,self.engine)
     async def provision(self):
         return await self.service.create_and_provision_wallet(username="testname",wallet_type=WalletType.CLINIC,
                                                               clinic_id=self.clinic_id,dso_id=None)
     async def test_naming_timeout_recovers_by_read_without_creating_another_wallet(self):
         self.tns.set_name.side_effect=TimeoutError("unknown")
         with self.assertRaises(TimeoutError):await self.provision()
-        wallet=self.db.query(Wallet).one()
+        wallet=(await self.db.scalars(select(Wallet))).one()
         self.assertEqual(wallet.external_wallet_address,"0xnew")
         self.assertTrue(wallet.external_wallet_password_encrypted)
         result=await self.provision()
@@ -225,11 +227,12 @@ class WalletRecoveryTests(unittest.IsolatedAsyncioTestCase):
         from app.security.encryption import decode_secret
         wallet=Wallet(id=uuid4(),clinic_id=self.clinic_id,wallet_type=WalletType.CLINIC,
                       external_wallet_address="0xnew",external_wallet_password_encrypted=encrypt_secret("old"))
-        self.db.add(wallet);self.db.commit()
+        self.db.add(wallet);await self.db.commit()
         self.keys.update_key_password.side_effect=TimeoutError("unknown")
         with self.assertRaises(TimeoutError):await self.service.update_wallet_password(wallet_id=wallet.id)
-        op=self.db.query(ExternalOperation).one()
+        op=(await self.db.scalars(select(ExternalOperation))).one()
         candidate=decode_json_secret(op.secrets_encrypted)["new_password"]
+        await self.db.refresh(wallet)
         self.assertEqual(decode_secret(wallet.external_wallet_password_encrypted),"old")
         self.keys.verify_key.return_value=False
         with self.assertRaises(ReconciliationRequired):await self.service.update_wallet_password(wallet_id=wallet.id)
@@ -241,16 +244,16 @@ class WalletRecoveryTests(unittest.IsolatedAsyncioTestCase):
 
 
 class FundingPersistenceTests(unittest.IsolatedAsyncioTestCase):
-    def setUp(self):
-        self.db,self.engine=local_session()
+    async def asyncSetUp(self):
+        self.db,self.engine=await local_session()
         self.wallet=Wallet(id=uuid4(),clinic_id=uuid4(),wallet_type=WalletType.CLINIC,status=WalletStatus.ACTIVE,
             external_wallet_address="0xabc",kyc_verified=True,currency="USD",cached_balance_minor=0)
-        self.db.add(self.wallet);self.db.commit()
+        self.db.add(self.wallet);await self.db.commit()
         self.client=SimpleNamespace(initialize_payment=AsyncMock(return_value={"result":True,"data":[{"TX_ID":"TX1"}]}))
         self.client.client=SimpleNamespace(config=SimpleNamespace(admin="test",adminpwd="test"))
         self.service=ToroForgeFundingService(self.db,self.client)
         self.cache=patch("app.services.billing.funding_service.invalidate_billing_scope");self.cache.start()
-    def tearDown(self):self.cache.stop();self.db.close();self.engine.dispose()
+    async def asyncTearDown(self):self.cache.stop();await close_local_session(self.db,self.engine)
     async def initialize(self,key="one",amount="10",wallet_id=None):
         return await self.service.initialize_wallet_funding(wallet_id=wallet_id or self.wallet.id,request_id=key,amount=amount,
             currency="USD",payment_type="card",success_url="https://example.com/ok",cancel_url="https://example.com/no")
@@ -260,7 +263,7 @@ class FundingPersistenceTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ToroForgeValidationError):await self.initialize(amount="20")
         second=Wallet(id=uuid4(),clinic_id=uuid4(),wallet_type=WalletType.CLINIC,status=WalletStatus.ACTIVE,
             external_wallet_address="0xsecond",kyc_verified=True,currency="USD")
-        self.db.add(second);self.db.commit()
+        self.db.add(second);await self.db.commit()
         self.client.initialize_payment.return_value={"result":True,"data":[{"TX_ID":"TX2"}]}
         self.assertNotEqual(first["payment_transaction_id"],(await self.initialize(wallet_id=second.id))["payment_transaction_id"])
         self.assertEqual(self.client.initialize_payment.await_count,2)
@@ -273,7 +276,7 @@ class FundingPersistenceTests(unittest.IsolatedAsyncioTestCase):
     async def test_successful_lookup_credits_once_without_settlement_configuration(self):
         from app.models.entities import PaymentTransaction
         await self.initialize()
-        payment=self.db.query(PaymentTransaction).one()
+        payment=(await self.db.scalars(select(PaymentTransaction))).one()
         evidence={"result":True,"data":[{"TX_ID":"TX1","TX_Currency":"USD","TX_Address":"0xabc","TX_Amount":"10"}]}
         self.client.get_payment_by_txid=AsyncMock(return_value=evidence)
         for _ in range(2):
@@ -287,43 +290,46 @@ class FundingPersistenceTests(unittest.IsolatedAsyncioTestCase):
     async def test_unsuccessful_lookup_never_credits(self):
         from app.models.entities import PaymentTransaction
         await self.initialize()
-        payment=self.db.query(PaymentTransaction).one()
+        payment=(await self.db.scalars(select(PaymentTransaction))).one()
+        # Capture ids once: each rejection rolls back, which expires the loaded rows.
+        payment_id,wallet_id=payment.id,self.wallet.id
         record={"TX_ID":"TX1","TX_Currency":"USD","TX_Address":"0xabc","TX_Amount":"10"}
         for flag in (False,None,"true"):
             self.client.get_payment_by_txid=AsyncMock(return_value={"result":flag,"data":[record]})
             with self.assertRaises(ToroForgeValidationError):
-                await self.service.verify_wallet_deposit(wallet_id=self.wallet.id,payment_transaction_id=payment.id,txid="TX1")
+                await self.service.verify_wallet_deposit(wallet_id=wallet_id,payment_transaction_id=payment_id,txid="TX1")
             with self.assertRaises(ToroForgeValidationError):
-                self.service.record_verified_funding_success(payment_transaction_id=payment.id,
+                await self.service.record_verified_funding_success(payment_transaction_id=payment_id,
                     provider_response={"result":flag,"matched_record":record})
+            await self.db.refresh(self.wallet)
             self.assertEqual(self.wallet.cached_balance_minor,0)
 
 
-class DatabaseInvariantTests(unittest.TestCase):
-    def setUp(self):self.db,self.engine=local_session()
-    def tearDown(self):self.db.close();self.engine.dispose()
-    def test_multiple_clinic_wallets_allowed_but_second_treasury_rejected(self):
+class DatabaseInvariantTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):self.db,self.engine=await local_session()
+    async def asyncTearDown(self):await close_local_session(self.db,self.engine)
+    async def test_multiple_clinic_wallets_allowed_but_second_treasury_rejected(self):
         from sqlalchemy.exc import IntegrityError
         dso=uuid4()
         self.db.add_all([Wallet(id=uuid4(),dso_id=dso,clinic_id=uuid4(),wallet_type=WalletType.CLINIC),
                          Wallet(id=uuid4(),dso_id=dso,clinic_id=uuid4(),wallet_type=WalletType.CLINIC),
                          Wallet(id=uuid4(),dso_id=dso,wallet_type=WalletType.DSO_TREASURY)])
-        self.db.commit()
+        await self.db.commit()
         self.db.add(Wallet(id=uuid4(),dso_id=dso,wallet_type=WalletType.DSO_TREASURY))
-        with self.assertRaises(IntegrityError):self.db.commit()
-        self.db.rollback()
-        self.assertEqual(self.db.query(Wallet).count(),3)
-    def test_duplicate_active_membership_is_rejected_but_inactive_history_allowed(self):
+        with self.assertRaises(IntegrityError):await self.db.commit()
+        await self.db.rollback()
+        self.assertEqual(await self.db.scalar(select(func.count()).select_from(Wallet)),3)
+    async def test_duplicate_active_membership_is_rejected_but_inactive_history_allowed(self):
         from sqlalchemy.exc import IntegrityError
         from app.models.entities import RoleAssignment,RoleType,ScopeType
         user,dso=uuid4(),uuid4()
         self.db.add_all([RoleAssignment(user_id=user,dso_id=dso,scope_type=ScopeType.DSO,role=RoleType.ADMIN,is_active=True),
                          RoleAssignment(user_id=user,dso_id=dso,scope_type=ScopeType.DSO,role=RoleType.ADMIN,is_active=False)])
-        self.db.commit()
+        await self.db.commit()
         self.db.add(RoleAssignment(user_id=user,dso_id=dso,scope_type=ScopeType.DSO,role=RoleType.ADMIN,is_active=True))
-        with self.assertRaises(IntegrityError):self.db.commit()
-        self.db.rollback()
-    def test_deleting_appointment_cannot_cascade_up_to_patient_or_clinic(self):
+        with self.assertRaises(IntegrityError):await self.db.commit()
+        await self.db.rollback()
+    async def test_deleting_appointment_cannot_cascade_up_to_patient_or_clinic(self):
         from app.models.entities import Appointments
         from sqlalchemy import inspect
         mapper=inspect(Appointments)

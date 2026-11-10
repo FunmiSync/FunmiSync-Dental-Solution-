@@ -17,7 +17,10 @@ configure_test_environment()
 MODULES = json.loads((ROOT / "docs/mvc_module_map.json").read_text())
 FINGERPRINTS = json.loads((ROOT / "docs/mvc_implementation_baseline.json").read_text())
 PHASE_4_CHANGES = json.loads((ROOT / "docs/phase_4_changed_modules.json").read_text())
+PHASE_5_CHANGES = json.loads((ROOT / "docs/phase_5_changed_modules.json").read_text())
+INTENTIONAL_CHANGES = {**PHASE_4_CHANGES, **PHASE_5_CHANGES}
 LEGACY_ROOTS = {"core", "auth", "api", "infra", "billing", "caches", "workers", "sdk", "config"}
+SESSION_METHODS = {"query", "add", "add_all", "commit", "flush", "rollback", "refresh", "execute", "delete", "merge"}
 _guards = []
 
 
@@ -119,19 +122,125 @@ class ArchitectureBoundaryTests(unittest.TestCase):
                 return None
 
         for new, expected in FINGERPRINTS["non_import_ast_sha256"].items():
-            if new in PHASE_4_CHANGES:
-                self.assertGreater(len(PHASE_4_CHANGES[new]), 20)
+            if new in INTENTIONAL_CHANGES:
+                self.assertGreater(len(INTENTIONAL_CHANGES[new]), 20)
                 continue
             with self.subTest(module=new):
                 after = ast.parse((ROOT / (new.replace(".", "/") + ".py")).read_text())
                 actual = hashlib.sha256(ast.dump(RemoveImports().visit(after)).encode()).hexdigest()
                 self.assertEqual(expected, actual)
 
+    def test_recorded_changes_name_real_modules(self):
+        # A misspelled entry would silently switch off a fingerprint check.
+        for name in INTENTIONAL_CHANGES:
+            self.assertTrue((ROOT / (name.replace(".", "/") + ".py")).exists(), name)
+
     def test_original_offline_contract_inspection_follows_aliases(self):
         captured = capture_contract()
         self.assertEqual(len(captured["routes"]), 38)
         self.assertEqual(len(captured["schemas"]), 61)
         self.assertEqual(len(captured["cookies"]), 3)
+
+
+def _own_nodes(function):
+    # The function's own body, excluding nested functions and classes.
+    stack = list(function.body)
+    while stack:
+        node = stack.pop()
+        yield node
+        stack.extend(child for child in ast.iter_child_nodes(node)
+                     if not isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)))
+
+
+def _defines_router(path):
+    return any(isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "router" for t in node.targets)
+               for node in ast.parse(path.read_text()).body)
+
+
+class LayerRuleTests(unittest.TestCase):
+    """Controllers handle HTTP, services own rules and transactions."""
+
+    def test_controllers_leave_database_work_to_services(self):
+        for path in (ROOT / "app/controllers").rglob("*.py"):
+            for node in ast.walk(ast.parse(path.read_text())):
+                if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                        and isinstance(node.func.value, ast.Name) and node.func.value.id == "db"
+                        and node.func.attr in SESSION_METHODS):
+                    self.fail(f"{path.relative_to(ROOT)}:{node.lineno} calls db.{node.func.attr}(); move it into a service")
+
+    def test_services_raise_domain_errors_not_http_errors(self):
+        for path in (ROOT / "app/services").rglob("*.py"):
+            for node in ast.walk(ast.parse(path.read_text())):
+                if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith(("fastapi", "starlette")):
+                    names = {alias.name for alias in node.names}
+                    self.assertNotIn("HTTPException", names, f"{path.relative_to(ROOT)}: raise app.services.errors instead")
+
+    def test_async_functions_actually_wait_on_something(self):
+        # An `async def` that never awaits runs on the shared event loop, so its database and
+        # cache calls freeze every other request. Write plain `def`: FastAPI runs those routes
+        # in a thread pool, and callers no longer `await` something that cannot pause.
+        allowed = {("app/controllers/errors.py", "service_error_handler")}  # builds a response, no I/O
+        for path in (ROOT / "app").rglob("*.py"):
+            relative = str(path.relative_to(ROOT))
+            for node in ast.walk(ast.parse(path.read_text())):
+                if not isinstance(node, ast.AsyncFunctionDef) or (relative, node.name) in allowed:
+                    continue
+                waits = any(isinstance(n, (ast.Await, ast.AsyncWith, ast.AsyncFor)) for n in _own_nodes(node))
+                self.assertTrue(waits, f"{relative}:{node.lineno} {node.name} is async but never awaits; make it def")
+
+    def test_app_code_uses_only_the_async_session(self):
+        # The API and worker run on AsyncSession (asyncpg). Only alembic/ and tools/ keep a sync session.
+        for path in (ROOT / "app").rglob("*.py"):
+            relative = str(path.relative_to(ROOT))
+            for node in ast.walk(ast.parse(path.read_text())):
+                if isinstance(node, ast.ImportFrom) and node.module == "sqlalchemy.orm":
+                    self.assertNotIn("Session", {alias.name for alias in node.names}, f"{relative}: use AsyncSession")
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "query":
+                    self.fail(f"{relative}:{node.lineno} uses the legacy Query API; use select() with the async session")
+
+    def test_session_calls_are_awaited(self):
+        # A missing await on commit()/execute() silently does nothing; this catches it statically.
+        for path in (ROOT / "app").rglob("*.py"):
+            tree = ast.parse(path.read_text())
+            awaited = {id(node.value) for node in ast.walk(tree) if isinstance(node, ast.Await)}
+            for node in ast.walk(tree):
+                if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                        and node.func.attr in SESSION_METHODS - {"add", "add_all", "query"}
+                        and ast.unparse(node.func.value).split(".")[-1] == "db"):
+                    self.assertIn(id(node), awaited, f"{path.relative_to(ROOT)}:{node.lineno} {ast.unparse(node)} is not awaited")
+
+    def test_controllers_import_shared_helpers_not_other_routers(self):
+        for path in (ROOT / "app/controllers").rglob("*.py"):
+            for node in ast.walk(ast.parse(path.read_text())):
+                if not (isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("app.controllers")):
+                    continue
+                base = ROOT / node.module.replace(".", "/")
+                targets = [base.with_suffix(".py")] if base.with_suffix(".py").exists() else \
+                          [base / f"{alias.name}.py" for alias in node.names]
+                for target in targets:
+                    self.assertFalse(_defines_router(target),
+                                     f"{path.relative_to(ROOT)} imports router module {target.relative_to(ROOT)}")
+
+
+class ServiceErrorTranslationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_each_domain_error_keeps_its_status_and_detail_shape(self):
+        from app.controllers.errors import service_error_handler
+        from app.services import errors
+        from app.services.registration import RegistrationConflict
+        expected = {errors.InvalidRequest: 400, RegistrationConflict: 400, errors.AuthenticationFailed: 401,
+                    errors.PermissionDenied: 403, errors.NotFound: 404, errors.Conflict: 409, errors.Gone: 410,
+                    errors.TooManyRequests: 429, errors.OperationFailed: 500, errors.ServiceError: 500}
+        for error_type, status_code in expected.items():
+            with self.subTest(error=error_type.__name__):
+                response = await service_error_handler(None, error_type("Readable message"))
+                self.assertEqual(response.status_code, status_code)
+                self.assertEqual(json.loads(response.body), {"detail": "Readable message"})
+
+    def test_application_registers_the_translator(self):
+        from main import app
+        from app.services.errors import ServiceError
+        from app.controllers.errors import service_error_handler
+        self.assertIs(app.exception_handlers[ServiceError], service_error_handler)
 
 
 class ModelMetadataTests(unittest.TestCase):

@@ -2,8 +2,9 @@ from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from uuid import UUID
 
-from sqlalchemy import func
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.infrastructure.cache.toroforge_billing_cache import CLINIC__BILLING_TTL_SECONDS, DSO_BILLING_TTL_SECONDS, cache_get_json, cache_set_json, clinic_billing_cache_key, dso_billing_cache_key
 from app.models.entities import BillingSubscription, LedgerDirection, LedgerEntryType, LedgerStatus, PaymentTransaction, PaymentTransactionStatus, RegisteredClinics, ScopeType, SubscriptionStatus, Wallet, WalletLedgerEntry, WalletType
@@ -320,17 +321,17 @@ def active_subscription_statuses() -> list[SubscriptionStatus]:
     ]
 
 
-def build_recent_ledger_rows(
+async def build_recent_ledger_rows(
     *,
-    db: Session,
+    db: AsyncSession,
     wallet_filter,
     limit: int = 10,
 ) -> list[toroforge_wallet_ledger_row_out]:
     CounterpartyWallet = aliased(Wallet)
     CounterpartyClinic = aliased(RegisteredClinics)
 
-    ledger_rows = (
-        db.query(
+    ledger_rows = (await db.execute(
+        select(
             WalletLedgerEntry,
             Wallet,
             RegisteredClinics,
@@ -347,14 +348,13 @@ def build_recent_ledger_rows(
             CounterpartyClinic,
             CounterpartyClinic.id == CounterpartyWallet.clinic_id,
         )
-        .filter(wallet_filter)
+        .where(wallet_filter)
         .order_by(
             func.coalesce(WalletLedgerEntry.posted_at, WalletLedgerEntry.created_at).desc(),
             WalletLedgerEntry.created_at.desc(),
         )
         .limit(limit)
-        .all()
-    )
+    )).all()
 
     return [
         to_ledger_row(
@@ -370,25 +370,25 @@ def build_recent_ledger_rows(
     ]
 
 
-def build_dso_billing_command_center_cached(
-    db: Session,
+async def build_dso_billing_command_center_cached(
+    db: AsyncSession,
     *,
     dso_id: UUID,
 ) -> toroforge_dso_billing_out:
     cache_key = dso_billing_cache_key(dso_id=dso_id)
-    cached = cache_get_json(cache_key)
+    cached = await cache_get_json(cache_key)
     if cached:
         return toroforge_dso_billing_out(**cached)
 
     month_start, month_end = month_window()
 
-    treasury_wallet = (
-        db.query(Wallet)
-        .filter(
+    treasury_wallet = await db.scalar(
+        select(Wallet)
+        .where(
             Wallet.dso_id == dso_id,
             Wallet.wallet_type == WalletType.DSO_TREASURY,
         )
-        .first()
+        .limit(1)
     )
 
     if not treasury_wallet:
@@ -402,19 +402,18 @@ def build_dso_billing_command_center_cached(
             billing_health_status="attention",
             billing_health_reason="No DSO treasury wallet found",
         )
-        cache_set_json(cache_key, response.model_dump(mode="json"), DSO_BILLING_TTL_SECONDS)
+        await cache_set_json(cache_key, response.model_dump(mode="json"), DSO_BILLING_TTL_SECONDS)
         return response
 
-    clinic_rows = (
-        db.query(Wallet, RegisteredClinics)
+    clinic_rows = (await db.execute(
+        select(Wallet, RegisteredClinics)
         .outerjoin(RegisteredClinics, RegisteredClinics.id == Wallet.clinic_id)
-        .filter(
+        .where(
             Wallet.dso_id == dso_id,
             Wallet.wallet_type == WalletType.CLINIC,
         )
         .order_by(RegisteredClinics.clinic_name.asc())
-        .all()
-    )
+    )).all()
 
     clinic_wallets = [
         to_wallet_item(wallet=wallet, clinic_name=clinic.clinic_name if clinic else None)
@@ -422,22 +421,19 @@ def build_dso_billing_command_center_cached(
     ]
 
     wallet_inflow_this_month_minor = int(
-        db.query(func.coalesce(func.sum(WalletLedgerEntry.amount_minor), 0))
-        .filter(
+        await db.scalar(select(func.coalesce(func.sum(WalletLedgerEntry.amount_minor), 0)).where(
             WalletLedgerEntry.wallet_id == treasury_wallet.id,
             WalletLedgerEntry.entry_type == LedgerEntryType.TOP_UP,
             WalletLedgerEntry.direction == LedgerDirection.CREDIT,
             WalletLedgerEntry.status == LedgerStatus.POSTED,
             WalletLedgerEntry.posted_at >= month_start,
             WalletLedgerEntry.posted_at < month_end,
-        )
-        .scalar()
+        ))
         or 0
     )
 
     premium_charges_this_month_minor = int(
-        db.query(func.coalesce(func.sum(WalletLedgerEntry.amount_minor), 0))
-        .filter(
+        await db.scalar(select(func.coalesce(func.sum(WalletLedgerEntry.amount_minor), 0)).where(
             WalletLedgerEntry.wallet_id == treasury_wallet.id,
             WalletLedgerEntry.entry_type.in_(
                 [LedgerEntryType.SUBSCRIPTION_CHARGE, LedgerEntryType.USAGE_CHARGE]
@@ -446,37 +442,34 @@ def build_dso_billing_command_center_cached(
             WalletLedgerEntry.status == LedgerStatus.POSTED,
             WalletLedgerEntry.posted_at >= month_start,
             WalletLedgerEntry.posted_at < month_end,
-        )
-        .scalar()
+        ))
         or 0
     )
 
     failed_payment_count = int(
-        db.query(func.count(PaymentTransaction.id))
-        .filter(
+        await db.scalar(select(func.count(PaymentTransaction.id)).where(
             PaymentTransaction.dso_id == dso_id,
             PaymentTransaction.status == PaymentTransactionStatus.FAILED,
             PaymentTransaction.created_at >= month_start,
             PaymentTransaction.created_at < month_end,
-        )
-        .scalar()
+        ))
         or 0
     )
 
-    recent_ledger = build_recent_ledger_rows(
+    recent_ledger = await build_recent_ledger_rows(
         db=db,
         wallet_filter=Wallet.dso_id == dso_id,
     )
 
-    subscription = (
-        db.query(BillingSubscription)
-        .filter(
+    subscription = await db.scalar(
+        select(BillingSubscription)
+        .where(
             BillingSubscription.scope_type == ScopeType.DSO,
             BillingSubscription.dso_id == dso_id,
             BillingSubscription.status.in_(active_subscription_statuses()),
         )
         .order_by(BillingSubscription.created_at.desc())
-        .first()
+        .limit(1)
     )
 
     response = toroforge_dso_billing_out(
@@ -526,33 +519,33 @@ def build_dso_billing_command_center_cached(
         active_subscription=to_subscription_item(subscription) if subscription else None,
     )
 
-    cache_set_json(cache_key, response.model_dump(mode="json"), DSO_BILLING_TTL_SECONDS)
+    await cache_set_json(cache_key, response.model_dump(mode="json"), DSO_BILLING_TTL_SECONDS)
     return response
 
 
-def build_clinic_billing_command_center_cached(
-    db: Session,
+async def build_clinic_billing_command_center_cached(
+    db: AsyncSession,
     *,
     clinic_id: UUID,
 ) -> toroforge_clinic_billing_out:
     cache_key = clinic_billing_cache_key(clinic_id=clinic_id)
-    cached = cache_get_json(cache_key)
+    cached = await cache_get_json(cache_key)
     if cached:
         return toroforge_clinic_billing_out(**cached)
 
     month_start, month_end = month_window()
 
-    clinic = db.query(RegisteredClinics).filter(RegisteredClinics.id == clinic_id).first()
+    clinic = await db.scalar(select(RegisteredClinics).where(RegisteredClinics.id == clinic_id).limit(1))
     if not clinic:
         raise ValueError("Clinic not found")
 
-    clinic_wallet = (
-        db.query(Wallet)
-        .filter(
+    clinic_wallet = await db.scalar(
+        select(Wallet)
+        .where(
             Wallet.clinic_id == clinic_id,
             Wallet.wallet_type == WalletType.CLINIC,
         )
-        .first()
+        .limit(1)
     )
 
     if not clinic_wallet:
@@ -568,12 +561,11 @@ def build_clinic_billing_command_center_cached(
             billing_health_status="attention",
             billing_health_reason="No clinic wallet found",
         )
-        cache_set_json(cache_key, response.model_dump(mode="json"), CLINIC__BILLING_TTL_SECONDS)
+        await cache_set_json(cache_key, response.model_dump(mode="json"), CLINIC__BILLING_TTL_SECONDS)
         return response
 
     wallet_inflow_this_month_minor = int(
-        db.query(func.coalesce(func.sum(WalletLedgerEntry.amount_minor), 0))
-        .filter(
+        await db.scalar(select(func.coalesce(func.sum(WalletLedgerEntry.amount_minor), 0)).where(
             WalletLedgerEntry.wallet_id == clinic_wallet.id,
             WalletLedgerEntry.entry_type.in_(
                 [LedgerEntryType.TOP_UP, LedgerEntryType.TRANSFER_IN]
@@ -582,14 +574,12 @@ def build_clinic_billing_command_center_cached(
             WalletLedgerEntry.status == LedgerStatus.POSTED,
             WalletLedgerEntry.posted_at >= month_start,
             WalletLedgerEntry.posted_at < month_end,
-        )
-        .scalar()
+        ))
         or 0
     )
 
     premium_charges_this_month_minor = int(
-        db.query(func.coalesce(func.sum(WalletLedgerEntry.amount_minor), 0))
-        .filter(
+        await db.scalar(select(func.coalesce(func.sum(WalletLedgerEntry.amount_minor), 0)).where(
             WalletLedgerEntry.wallet_id == clinic_wallet.id,
             WalletLedgerEntry.entry_type.in_(
                 [LedgerEntryType.SUBSCRIPTION_CHARGE, LedgerEntryType.USAGE_CHARGE]
@@ -598,37 +588,34 @@ def build_clinic_billing_command_center_cached(
             WalletLedgerEntry.status == LedgerStatus.POSTED,
             WalletLedgerEntry.posted_at >= month_start,
             WalletLedgerEntry.posted_at < month_end,
-        )
-        .scalar()
+        ))
         or 0
     )
 
     failed_payment_count = int(
-        db.query(func.count(PaymentTransaction.id))
-        .filter(
+        await db.scalar(select(func.count(PaymentTransaction.id)).where(
             PaymentTransaction.clinic_id == clinic_id,
             PaymentTransaction.status == PaymentTransactionStatus.FAILED,
             PaymentTransaction.created_at >= month_start,
             PaymentTransaction.created_at < month_end,
-        )
-        .scalar()
+        ))
         or 0
     )
 
-    recent_ledger = build_recent_ledger_rows(
+    recent_ledger = await build_recent_ledger_rows(
         db=db,
         wallet_filter=Wallet.id == clinic_wallet.id,
     )
 
-    subscription = (
-        db.query(BillingSubscription)
-        .filter(
+    subscription = await db.scalar(
+        select(BillingSubscription)
+        .where(
             BillingSubscription.scope_type == ScopeType.CLINIC,
             BillingSubscription.clinic_id == clinic_id,
             BillingSubscription.status.in_(active_subscription_statuses()),
         )
         .order_by(BillingSubscription.created_at.desc())
-        .first()
+        .limit(1)
     )
 
     response = toroforge_clinic_billing_out(
@@ -678,5 +665,5 @@ def build_clinic_billing_command_center_cached(
         active_subscription=to_subscription_item(subscription) if subscription else None,
     )
 
-    cache_set_json(cache_key, response.model_dump(mode="json"), CLINIC__BILLING_TTL_SECONDS)
+    await cache_set_json(cache_key, response.model_dump(mode="json"), CLINIC__BILLING_TTL_SECONDS)
     return response

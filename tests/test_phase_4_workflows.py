@@ -12,7 +12,8 @@ from pydantic import ValidationError
 from runtime_support import configure_test_environment, guarded_local_services
 configure_test_environment()
 
-from local_database import local_session
+from sqlalchemy import func, select
+from local_database import close_local_session, local_session, local_sync_session
 from app.models.entities import RegisteredClinics, Patients, Dso, RoleAssignment, Audit_logs, ExternalOperation
 from app.schemas.api import patient_model, AppointmentRequest, usercreate, cliniccreate, Webhook_requests
 from app.services.patient_creation import PatientService
@@ -36,12 +37,12 @@ def clinic_row():
 
 
 class PatientMatchingTests(unittest.IsolatedAsyncioTestCase):
-    def setUp(self):
-        self.db,self.engine=local_session();self.clinic=clinic_row();self.db.add(self.clinic);self.db.commit()
+    async def asyncSetUp(self):
+        self.db,self.engine=await local_session();self.clinic=clinic_row();self.db.add(self.clinic);await self.db.commit()
         self.patient=patient_model(FName="Test",LName="Patient",Birthdate="2000-01-01",Gender="Unknown")
         self.provider=SimpleNamespace(search_patients=AsyncMock(return_value=[]),create_patient=AsyncMock(return_value={"PatNum":12}))
         self.service=PatientService(self.db,self.provider,self.clinic.id)
-    def tearDown(self):self.db.close();self.engine.dispose()
+    async def asyncTearDown(self):await close_local_session(self.db,self.engine)
 
     async def test_missing_birthdate_does_not_search_or_create(self):
         self.patient.Birthdate=None
@@ -63,7 +64,7 @@ class PatientMatchingTests(unittest.IsolatedAsyncioTestCase):
         first=await self.service.resolve_patnum(self.patient,"contact")
         second=await self.service.resolve_patnum(self.patient,"contact")
         self.assertEqual(first,second);self.provider.create_patient.assert_awaited_once()
-        row=self.db.query(Patients).one()
+        row=(await self.db.scalars(select(Patients))).one()
         self.assertNotIn("Patient",row.LName);self.assertEqual(decode_secret(row.Gender),"Unknown")
 
     async def test_unknown_creation_never_blindly_creates_again(self):
@@ -74,15 +75,15 @@ class PatientMatchingTests(unittest.IsolatedAsyncioTestCase):
 
 
 class AppointmentJournalTests(unittest.IsolatedAsyncioTestCase):
-    def setUp(self):
-        self.db,self.engine=local_session();self.clinic=clinic_row();self.db.add(self.clinic);self.db.commit()
+    async def asyncSetUp(self):
+        self.db,self.engine=await local_session();self.clinic=clinic_row();self.db.add(self.clinic);await self.db.commit()
         self.provider=SimpleNamespace(create_appointments=AsyncMock(return_value={"AptNum":42}),
             create_commslog=AsyncMock(return_value={}),create_pops=AsyncMock(return_value={}))
         self.service=AppointmentService(self.db,self.clinic,self.provider)
         self.req=AppointmentRequest(date_str="2026-10-17",start_str="09:00",end_str="09:30",status="Scheduled",
             calendar_id="calendar",event_id="event",contact_id="contact",pat_id=uuid4(),pat_Num=12,clinic_timezone="UTC",
             commslog="called",pop_up="note")
-    def tearDown(self):self.db.close();self.engine.dispose()
+    async def asyncTearDown(self):await close_local_session(self.db,self.engine)
 
     async def create(self):
         return await self.service.create_appointment(self.req,"XXXXXX",1,datetime(2026,10,17,9))
@@ -128,7 +129,7 @@ class DataPrivacyTests(unittest.TestCase):
 
     def test_backfill_dry_run_is_non_mutating_then_idempotent(self):
         from tools.backfill_private_data import plan
-        db,engine=local_session()
+        db,engine=local_sync_session()
         try:
             c=clinic_row();db.add(c);db.commit()
             row=Patients(id=uuid4(),FName="Test",LName="Patient",Gender="Unknown",phone="123",email="x@example.com",
@@ -142,20 +143,21 @@ class DataPrivacyTests(unittest.TestCase):
         finally:db.close();engine.dispose()
 
 
-class RegistrationAndValidationTests(unittest.TestCase):
-    def test_dso_and_admin_role_commit_together_and_rollback_together(self):
+class RegistrationAndValidationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_dso_and_admin_role_commit_together_and_rollback_together(self):
         from app.services.registration import create_dso
-        db,engine=local_session()
+        db,engine=await local_session()
+        count=lambda model: db.scalar(select(func.count()).select_from(model))
         try:
             user=uuid4()
             with patch.object(db,"commit",side_effect=RuntimeError("failure")), self.assertRaises(RuntimeError):
-                create_dso(db,user_id=user,name="Test")
-            self.assertEqual(db.query(Dso).count(),0);self.assertEqual(db.query(RoleAssignment).count(),0)
-            create_dso(db,user_id=user,name="Test")
-            self.assertEqual(db.query(Dso).count(),1);self.assertEqual(db.query(RoleAssignment).count(),1)
-            audit=db.query(Audit_logs).one();self.assertEqual(audit.action,"create")
+                await create_dso(db,user_id=user,name="Test")
+            self.assertEqual(await count(Dso),0);self.assertEqual(await count(RoleAssignment),0)
+            await create_dso(db,user_id=user,name="Test")
+            self.assertEqual(await count(Dso),1);self.assertEqual(await count(RoleAssignment),1)
+            audit=(await db.scalars(select(Audit_logs))).one();self.assertEqual(audit.action,"create")
             self.assertEqual(decode_json_secret(audit.details["encrypted"])["actor_user_id"],str(user))
-        finally:db.close();engine.dispose()
+        finally:await close_local_session(db,engine)
 
     def test_password_bcrypt_limit_uses_bytes_and_names_cannot_be_blank(self):
         for data in ({"username":" ","password":"password"},{"username":"name","password":" "},
@@ -163,24 +165,32 @@ class RegistrationAndValidationTests(unittest.TestCase):
             with self.assertRaises(ValidationError):usercreate(email="x@example.com",**data)
 
 
-class ClinicLockTests(unittest.TestCase):
-    def test_busy_lock_never_enters_workflow_and_closes_connection(self):
-        from app.infrastructure.clinic_lock import clinic_sync_lock,ClinicBusyError
-        db=MagicMock();db.get_bind.return_value.dialect.name="postgresql"
-        connection=db.get_bind.return_value.connect.return_value
-        connection.execute.return_value.scalar_one.return_value=False
-        with self.assertRaises(ClinicBusyError):
-            with clinic_sync_lock(db,uuid4()):self.fail("busy workflow entered")
-        connection.close.assert_called_once()
+def lock_session():
+    # An AsyncSession whose bind hands out one mocked async connection.
+    connection=MagicMock(name="AsyncConnection")
+    for name in ("execute","commit","invalidate","close"):
+        setattr(connection,name,AsyncMock(name=name))
+    db=MagicMock(name="AsyncSession");db.bind.dialect.name="postgresql"
+    db.bind.connect=AsyncMock(return_value=connection)
+    return db,connection
 
-    def test_unlock_failure_invalidates_connection_before_pool_return(self):
+
+class ClinicLockTests(unittest.IsolatedAsyncioTestCase):
+    async def test_busy_lock_never_enters_workflow_and_closes_connection(self):
+        from app.infrastructure.clinic_lock import clinic_sync_lock,ClinicBusyError
+        db,connection=lock_session()
+        connection.execute.return_value=SimpleNamespace(scalar_one=lambda:False)
+        with self.assertRaises(ClinicBusyError):
+            async with clinic_sync_lock(db,uuid4()):self.fail("busy workflow entered")
+        connection.close.assert_awaited_once()
+
+    async def test_unlock_failure_invalidates_connection_before_pool_return(self):
         from app.infrastructure.clinic_lock import clinic_sync_lock
-        db=MagicMock();db.get_bind.return_value.dialect.name="postgresql"
-        connection=db.get_bind.return_value.connect.return_value
+        db,connection=lock_session()
         connection.execute.side_effect=[SimpleNamespace(scalar_one=lambda:True),RuntimeError("unlock failed")]
         with self.assertRaises(RuntimeError):
-            with clinic_sync_lock(db,uuid4()):pass
-        connection.invalidate.assert_called_once();connection.close.assert_called_once()
+            async with clinic_sync_lock(db,uuid4()):pass
+        connection.invalidate.assert_awaited_once();connection.close.assert_awaited_once()
 
 
 class ReadinessAndStreamTests(unittest.IsolatedAsyncioTestCase):
@@ -192,18 +202,38 @@ class ReadinessAndStreamTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code,503);self.assertFalse(json.loads(response.body)["database"])
 
     async def test_revoked_stream_sends_no_waiting_event_and_closes_pubsub(self):
+        # Access is granted when the stream opens, then revoked while it waits for an event.
         from app.controllers.sync_logs import sync_log_clinic as module
+        from app.controllers.sync_logs import streaming
+        from app.security import stream_access
         request=SimpleNamespace(headers={"Authorization":"Bearer token"},cookies={},is_disconnected=AsyncMock(return_value=False))
         pubsub=SimpleNamespace(subscribe=AsyncMock(),get_message=AsyncMock(return_value={"type":"message","data":"private event"}),
             unsubscribe=AsyncMock(),aclose=AsyncMock())
-        db=MagicMock()
-        with patch.object(module,"SessionLocal",return_value=db),patch.object(module,"get_current_user",return_value=SimpleNamespace(id=uuid4())), \
-             patch.object(module,"require_clinic_access"),patch.object(module,"revalidate_stream",side_effect=HTTPException(403)), \
-             patch.object(module,"async_redis",SimpleNamespace(pubsub=lambda:pubsub)):
+        # Each permission check opens `async with AsyncSessionLocal() as db`.
+        session=MagicMock(name="session context")
+        session.__aenter__=AsyncMock(return_value=MagicMock(name="AsyncSession"))
+        session.__aexit__=AsyncMock(return_value=False)
+        with patch.object(stream_access,"AsyncSessionLocal",return_value=session), \
+             patch.object(stream_access,"get_current_user",return_value=SimpleNamespace(id=uuid4())), \
+             patch.object(stream_access,"require_clinic_access",side_effect=[None,HTTPException(403)]) as access, \
+             patch.object(streaming,"async_redis",SimpleNamespace(pubsub=lambda:pubsub)):
             response=await module.stream_clinic_sync_logs_events(uuid4(),request)
             body="".join([part async for part in response.body_iterator])
         self.assertIn("access_revoked",body);self.assertNotIn("private event",body)
-        pubsub.aclose.assert_awaited_once();db.close.assert_called_once()
+        self.assertEqual(access.call_count,2)
+        # Every permission check opens its own session and must close it.
+        pubsub.aclose.assert_awaited_once();self.assertEqual(session.__aexit__.await_count,2)
+
+    async def test_stream_without_token_is_rejected_before_subscribing(self):
+        from app.controllers.sync_logs import sync_log_dso as module
+        from app.controllers.sync_logs import streaming
+        request=SimpleNamespace(headers={},cookies={},url=SimpleNamespace(path="/dsos/x/sync-logs/stream"))
+        pubsub=MagicMock()
+        with patch.object(streaming,"async_redis",SimpleNamespace(pubsub=lambda:pubsub)), \
+             self.assertRaises(HTTPException) as caught:
+            await module.stream_dso_sync_logs_page(uuid4(),request)
+        self.assertEqual(caught.exception.status_code,401)
+        pubsub.subscribe.assert_not_called()
 
 
 class ProviderBoundaryTests(unittest.IsolatedAsyncioTestCase):
@@ -224,11 +254,11 @@ class ProviderBoundaryTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(httpx.ReadTimeout):await service._request("POST","/contacts",json={})
             self.assertEqual(request.await_count,2)
             retry.assert_not_awaited()
-    async def test_login_key_does_not_contain_email_or_address(self):
+    def test_login_key_does_not_contain_email_or_address(self):
         from app.services.auth.login_attempts import login_attempts
-        key=await login_attempts("Person@example.com","127.0.0.1")
+        key=login_attempts("Person@example.com","127.0.0.1")
         self.assertNotIn("Person",key);self.assertNotIn("example.com",key);self.assertNotIn("127.0.0.1",key)
-        self.assertEqual(key,await login_attempts(" person@example.com ","127.0.0.1"))
+        self.assertEqual(key,login_attempts(" person@example.com ","127.0.0.1"))
 
 
 class MigrationPreparationTests(unittest.TestCase):

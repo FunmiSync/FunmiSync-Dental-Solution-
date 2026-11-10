@@ -1,7 +1,7 @@
 from typing import Literal
 from uuid import UUID
 from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.security.oauth2 import get_current_user
 from app.infrastructure.database import get_db
 from app.models.entities import Users
@@ -21,11 +21,11 @@ async def get_dso_clinics(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     current_user: Users = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    require_dso_access(db=db, user_id=current_user.id, dso_id=dso_id)
+    await require_dso_access(db=db, user_id=current_user.id, dso_id=dso_id)
 
-    return build_dso_clinic_list(
+    return await build_dso_clinic_list(
         db,
         dso_id=dso_id,
         user_id=current_user.id,
@@ -45,11 +45,11 @@ async def disable_clinic_from_dso(
     dso_id: UUID,
     clinic_id: UUID,
     current_user: Users = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    require_dso_manage(db=db, user_id=current_user.id, dso_id=dso_id)
+    await require_dso_manage(db=db, user_id=current_user.id, dso_id=dso_id)
 
-    return disable_dso_clinic(
+    return await disable_dso_clinic(
         db,
         dso_id=dso_id,
         clinic_id=clinic_id,

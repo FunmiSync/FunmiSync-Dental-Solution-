@@ -6,7 +6,8 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.security.encryption import decode_secret, decode_json_secret, encrypt_json_secret, hash_lookup
 from app.infrastructure.providers.toroforge.exceptions import ToroForgeError, ToroForgeValidationError
@@ -22,7 +23,7 @@ from app.infrastructure.cache.toroforge_billing_cache import invalidate_billing_
 class ToroForgeWalletTransferService:
     def __init__(
             self,
-            db:Session,
+            db: AsyncSession,
             transfer_client: ToroForgeWalletTransferClient
     ) -> None:
         
@@ -61,9 +62,8 @@ class ToroForgeWalletTransferService:
         )
 
         clinic = (
-            self.db.query(RegisteredClinics)
-            .filter(RegisteredClinics.id == clinic_id)
-            .first()
+            await self.db.scalar(select(RegisteredClinics)
+            .filter(RegisteredClinics.id == clinic_id).limit(1))
         )
 
         if not clinic:
@@ -75,36 +75,34 @@ class ToroForgeWalletTransferService:
             )
         
         sender_wallet = (
-            self.db.query(Wallet)
+            await self.db.scalar(select(Wallet)
             .filter(
                 Wallet.dso_id == dso_id,
                 Wallet.wallet_type == WalletType.DSO_TREASURY,
             )
-            .with_for_update().populate_existing()
-            .first()
+            .with_for_update().execution_options(populate_existing=True).limit(1))
         )
 
         if not sender_wallet:
             raise ToroForgeValidationError("DSO treasury wallet not found")
         
         receiver_wallet = (
-            self.db.query(Wallet)
+            await self.db.scalar(select(Wallet)
             .filter(
                 Wallet.clinic_id == clinic_id,
                 Wallet.wallet_type == WalletType.CLINIC,
             )
-            .with_for_update().populate_existing()
-            .first()
+            .with_for_update().execution_options(populate_existing=True).limit(1))
         )
 
         if not receiver_wallet:
             raise ToroForgeValidationError("Clinic wallet not found")
         
         scoped_key = f"transfer:{dso_id}:{hash_lookup(normalized_idempotency_key)}"
-        existing_transfer = self.db.query(WalletTransfer).filter(
+        existing_transfer = await self.db.scalar(select(WalletTransfer).filter(
             WalletTransfer.idempotency_key.in_([scoped_key, normalized_idempotency_key]),
             WalletTransfer.from_wallet_id == sender_wallet.id,
-        ).first()
+        ).limit(1))
         if existing_transfer:
             if (existing_transfer.from_wallet_id != sender_wallet.id
                 or existing_transfer.to_wallet_id != receiver_wallet.id
@@ -112,9 +110,9 @@ class ToroForgeWalletTransferService:
                 or existing_transfer.currency != normalized_currency):
                 raise ToroForgeValidationError("Idempotency key conflicts with an existing transfer")
             if existing_transfer.status == WalletTransferStatus.PENDING:
-                operation = self.operations.get(f"wallet-transfer:{existing_transfer.id}")
+                operation = await self.operations.get(f"wallet-transfer:{existing_transfer.id}")
                 if operation and operation.state == "succeeded":
-                    return self.post_confirmed_transfer(existing_transfer.id, decode_json_secret(operation.result_encrypted), reused=True)
+                    return await self.post_confirmed_transfer(existing_transfer.id, decode_json_secret(operation.result_encrypted), reused=True)
             return self.transfer_result(existing_transfer, reused=True)
 
         self.validate_transfer_wallets(
@@ -122,10 +120,10 @@ class ToroForgeWalletTransferService:
             dso_id=dso_id, clinic_id=clinic_id,
             currency=normalized_currency, amount_minor=amount_minor,
         )
-        pending = self.db.query(WalletTransfer).filter(
+        pending = await self.db.scalar(select(WalletTransfer).filter(
             WalletTransfer.from_wallet_id == sender_wallet.id,
             WalletTransfer.status == WalletTransferStatus.PENDING,
-        ).first()
+        ).limit(1))
         if pending:
             raise ReconciliationRequired("A pending treasury transfer requires reconciliation")
 
@@ -162,6 +160,7 @@ class ToroForgeWalletTransferService:
         )
 
         self.db.add(transfer)
+        transfer_id = transfer.id  # still readable after a rollback expires the row
 
         transaction_group_id = uuid4()
 
@@ -221,9 +220,9 @@ class ToroForgeWalletTransferService:
         self.db.add(receiver_ledger)
 
         try:
-            self.db.commit()  # intent + both pending ledger entries survive remote failure
+            await self.db.commit()  # intent + both pending ledger entries survive remote failure
         except IntegrityError as exc:
-            self.db.rollback()
+            await self.db.rollback()
             raise ReconciliationRequired("Concurrent transfer request; reload the existing operation") from exc
 
         async def send():
@@ -238,17 +237,17 @@ class ToroForgeWalletTransferService:
 
         try:
             response = await self.operations.execute(
-                key=f"wallet-transfer:{transfer.id}", resource_id=sender_wallet.id,
+                key=f"wallet-transfer:{transfer_id}", resource_id=sender_wallet.id,
                 action="wallet_transfer", request={"to": receiver_wallet.id, "amount_minor": amount_minor,
                                                    "currency": normalized_currency}, call=send,
             )
-            return self.post_confirmed_transfer(transfer.id, response, reused=False)
+            return await self.post_confirmed_transfer(transfer_id, response, reused=False)
         except DefinitiveRejection:
-            self.db.rollback()
-            self.mark_transfer_failed_safely(transfer_id=transfer.id, reason="Provider explicitly rejected transfer")
+            await self.db.rollback()
+            await self.mark_transfer_failed_safely(transfer_id=transfer_id, reason="Provider explicitly rejected transfer")
             raise
         except Exception:
-            self.db.rollback()
+            await self.db.rollback()
             # The committed pending intent deliberately remains. A different key
             # cannot spend this treasury again until the outcome is reconciled.
             raise
@@ -258,9 +257,9 @@ class ToroForgeWalletTransferService:
                 "external_transaction_id": transfer.external_transaction_id,
                 "amount_minor": transfer.amount_minor, "currency": transfer.currency, "reused": reused}
 
-    def post_confirmed_transfer(self, transfer_id, response, *, reused):
+    async def post_confirmed_transfer(self, transfer_id, response, *, reused):
         try:
-            transfer = self.db.query(WalletTransfer).filter(WalletTransfer.id == transfer_id).with_for_update().populate_existing().first()
+            transfer = await self.db.scalar(select(WalletTransfer).filter(WalletTransfer.id == transfer_id).with_for_update().execution_options(populate_existing=True).limit(1))
             if not transfer:
                 raise ToroForgeValidationError("Transfer not found")
             if transfer.status == WalletTransferStatus.COMPLETED:
@@ -268,7 +267,7 @@ class ToroForgeWalletTransferService:
             if transfer.status != WalletTransferStatus.PENDING:
                 raise ReconciliationRequired("Transfer is not pending")
             operation_key = f"wallet-transfer:{transfer.id}"
-            operation = self.operations.get(operation_key)
+            operation = await self.operations.get(operation_key)
             if not operation or operation.state != "succeeded":
                 raise ReconciliationRequired("Transfer has no durably confirmed provider result")
             external_id = self.extract_transfer_txid(response)
@@ -278,17 +277,17 @@ class ToroForgeWalletTransferService:
             records = response.get("data")
             if not records or not is_settled(records[0]):
                 raise ReconciliationRequired("Transfer acknowledgement lacks verified settlement status")
-            wallets = self.db.query(Wallet).filter(Wallet.id.in_([transfer.from_wallet_id, transfer.to_wallet_id])).order_by(Wallet.id).with_for_update().populate_existing().all()
+            wallets = (await self.db.scalars(select(Wallet).filter(Wallet.id.in_([transfer.from_wallet_id, transfer.to_wallet_id])).order_by(Wallet.id).with_for_update().execution_options(populate_existing=True))).all()
             by_id = {wallet.id: wallet for wallet in wallets}
             sender, receiver = by_id[transfer.from_wallet_id], by_id[transfer.to_wallet_id]
             new_sender = sender.cached_balance_minor - transfer.amount_minor
             new_receiver = receiver.cached_balance_minor + transfer.amount_minor
             if new_sender < 0 or new_receiver > MAX_MINOR:
                 raise ReconciliationRequired("Transfer balance requires reconciliation")
-            ledgers = self.db.query(WalletLedgerEntry).filter(
+            ledgers = (await self.db.scalars(select(WalletLedgerEntry).filter(
                 WalletLedgerEntry.reference_type == "wallet_transfer",
                 WalletLedgerEntry.reference_id == str(transfer.id),
-            ).with_for_update().populate_existing().all()
+            ).with_for_update().execution_options(populate_existing=True))).all()
             expected = {(sender.id, LedgerDirection.DEBIT), (receiver.id, LedgerDirection.CREDIT)}
             if (len(ledgers) != 2
                 or {(entry.wallet_id, entry.direction) for entry in ledgers} != expected
@@ -310,11 +309,11 @@ class ToroForgeWalletTransferService:
                 ledger.balance_after_minor = new_sender if ledger.wallet_id == sender.id else new_receiver
                 ledger.details = {**(ledger.details or {}), "stage": "provider_transfer_completed",
                                   "provider_response_encrypted": encrypt_json_secret(response)}
-            self.operations.mark_applied(operation_key)
+            await self.operations.mark_applied(operation_key)
             record_audit(self.db,clinic_id=receiver.clinic_id,entity_type="wallet_transfer",entity_id=transfer.id,
                          action="completed",details={"actor_user_id":str(transfer.initiated_by_user_id)})
-            self.db.commit()
-            invalidate_billing_scope(clinic_id=receiver.clinic_id, dso_id=sender.dso_id)
+            await self.db.commit()
+            await invalidate_billing_scope(clinic_id=receiver.clinic_id, dso_id=sender.dso_id)
             debit = next(entry for entry in ledgers if entry.wallet_id == sender.id)
             credit = next(entry for entry in ledgers if entry.wallet_id == receiver.id)
             return {**self.transfer_result(transfer, reused=reused),
@@ -323,7 +322,7 @@ class ToroForgeWalletTransferService:
                     "sender_new_cached_balance_minor": new_sender, "receiver_new_cached_balance_minor": new_receiver,
                     "provider_response": response}
         except Exception:
-            self.db.rollback()
+            await self.db.rollback()
             raise
 
     def validate_transfer_wallets(
@@ -421,7 +420,7 @@ class ToroForgeWalletTransferService:
 
 
     
-    def mark_transfer_failed_safely(
+    async def mark_transfer_failed_safely(
         self,
         *,
         transfer_id: UUID,
@@ -430,9 +429,8 @@ class ToroForgeWalletTransferService:
         
         try:
             transfer = (
-                self.db.query(WalletTransfer)
-                .filter(WalletTransfer.id == transfer_id)
-                .first()
+                await self.db.scalar(select(WalletTransfer)
+                .filter(WalletTransfer.id == transfer_id).limit(1))
             )
 
             if not transfer:
@@ -445,12 +443,11 @@ class ToroForgeWalletTransferService:
             transfer.failure_reason = reason
 
             ledgers = (
-                self.db.query(WalletLedgerEntry)
+                (await self.db.scalars(select(WalletLedgerEntry)
                 .filter(
                     WalletLedgerEntry.reference_type == "wallet_transfer",
                     WalletLedgerEntry.reference_id == str(transfer.id),
-                )
-                .all()
+                ))).all()
             )
 
             for ledger in ledgers:
@@ -463,10 +460,10 @@ class ToroForgeWalletTransferService:
                         "failure_reason": reason,
                     }
 
-            self.db.commit()
+            await self.db.commit()
 
         except SQLAlchemyError:
-            self.db.rollback()
+            await self.db.rollback()
             logger.exception(
                 "Failed to mark wallet transfer as failed",
                 extra={"wallet_transfer_id": str(transfer_id)},
