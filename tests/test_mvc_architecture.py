@@ -24,6 +24,27 @@ SESSION_METHODS = {"query", "add", "add_all", "commit", "flush", "rollback", "re
 _guards = []
 
 
+def ast_shape(node) -> str:
+    """ast.dump as Python 3.13+ prints it, on every Python version.
+
+    Older versions also print empty fields (None, [], and 3.12's type_params=[]),
+    which changed every fingerprint without any code changing. Skipping empty
+    fields gives the stored fingerprints on 3.11 too. Constant(value=None) keeps
+    its value, as ast.dump does, so None stays distinct.
+    """
+    if isinstance(node, ast.AST):
+        parts = []
+        for name, value in ast.iter_fields(node):
+            keeps_none = isinstance(node, (ast.Constant, ast.MatchSingleton)) and name == "value"
+            if (value is None and not keeps_none) or (isinstance(value, list) and not value):
+                continue
+            parts.append(f"{name}={ast_shape(value)}")
+        return f"{type(node).__name__}({', '.join(parts)})"
+    if isinstance(node, list):
+        return "[" + ", ".join(ast_shape(item) for item in node) + "]"
+    return repr(node)
+
+
 def setUpModule():
     for target in ("sqlalchemy.engine.Engine.connect", "redis.Redis.execute_command",
                    "redis.asyncio.Redis.execute_command", "httpx.AsyncClient.send"):
@@ -127,7 +148,7 @@ class ArchitectureBoundaryTests(unittest.TestCase):
                 continue
             with self.subTest(module=new):
                 after = ast.parse((ROOT / (new.replace(".", "/") + ".py")).read_text())
-                actual = hashlib.sha256(ast.dump(RemoveImports().visit(after)).encode()).hexdigest()
+                actual = hashlib.sha256(ast_shape(RemoveImports().visit(after)).encode()).hexdigest()
                 self.assertEqual(expected, actual)
 
     def test_recorded_changes_name_real_modules(self):
