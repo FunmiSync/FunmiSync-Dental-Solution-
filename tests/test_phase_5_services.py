@@ -258,6 +258,47 @@ class WorkspaceServiceTests(ServiceTestCase):
                          ("clinic", clinic.id))
 
 
+class WalletAccessThenServiceTests(ServiceTestCase):
+    """Endpoints run the wallet access check, then a service, on one session."""
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        from app.models.entities import Wallet, WalletStatus, WalletType
+        self.Wallet = Wallet
+        wallet = Wallet(id=uuid4(), clinic_id=uuid4(), wallet_type=WalletType.CLINIC, status=WalletStatus.ACTIVE,
+                        currency="USD", cached_balance_minor=0, external_wallet_address="0xabc", kyc_verified=False)
+        self.db.add(wallet)
+        await self.db.commit()
+        self.wallet_id = wallet.id
+        self.db.expunge_all()
+
+    async def kyc_status_after_access_check(self, verified):
+        from app.security.wallet_access import get_wallet_for_access_check
+        from app.services.billing.kyc_service import ToroForgeKYCService
+        checked = await get_wallet_for_access_check(db=self.db, wallet_id=self.wallet_id)  # the endpoint keeps it
+        service = ToroForgeKYCService(self.db, SimpleNamespace(
+            check_address_verified=AsyncMock(return_value={"verified": verified})))
+        result = await service.check_wallet_kyc_status(wallet_id=self.wallet_id)
+        return checked, result
+
+    async def test_refreshing_kyc_status_works_when_the_provider_changes_it(self):
+        # Regression: /kyc-status?refresh=true failed with MissingGreenlet on Render.
+        _, (status, verified) = await self.kyc_status_after_access_check(True)
+        self.assertEqual((status["verified"], verified), (True, True))
+        self.assertTrue(await self.db.scalar(select(self.Wallet.kyc_verified).where(self.Wallet.id == self.wallet_id)))
+
+    async def test_refreshing_kyc_status_works_when_nothing_changes(self):
+        _, (_, verified) = await self.kyc_status_after_access_check(False)
+        self.assertFalse(verified)
+
+    async def test_the_access_check_loads_the_whole_wallet(self):
+        from sqlalchemy import inspect
+        checked, _ = await self.kyc_status_after_access_check(True)
+        await self.db.refresh(checked)
+        self.assertEqual(inspect(checked).unloaded, set())
+        self.assertEqual(checked.currency, "USD")  # readable without a lazy load
+
+
 class AuthenticationServiceTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.db, self.engine = await local_session()

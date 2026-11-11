@@ -70,16 +70,18 @@ class ToroForgeKYCService:
             address=wallet.external_wallet_address
         )
 
-        wallet.kyc_verified = bool(status["verified"])
+        verified = bool(status["verified"])
+        wallet.kyc_verified = verified
 
         try:
             await self.db.commit()
-            await self.db.refresh(wallet)
         except Exception:
             await self.db.rollback()
             raise
 
-        return status, bool(wallet.kyc_verified)
+        # No refresh: the value was just written here, and reading a refreshed,
+        # partially loaded row is what broke this endpoint under the async session.
+        return status, verified
 
     async def get_cached_wallet_kyc_status(self, *, wallet_id: UUID) -> bool:
         wallet = (

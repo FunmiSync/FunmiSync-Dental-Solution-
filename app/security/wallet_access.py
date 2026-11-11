@@ -8,7 +8,6 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import load_only
 
 from app.models.entities import RegisteredClinics, Wallet
 from app.security.rbac import require_clinic_access, require_clinic_manage, require_dso_access, require_dso_manage
@@ -22,10 +21,11 @@ def _unlinked_wallet() -> HTTPException:
 
 
 async def get_wallet_for_access_check(*, db: AsyncSession, wallet_id: UUID) -> Wallet:
-    # Load only the ownership columns; the full row is loaded later under a lock.
-    wallet = await db.scalar(
-        select(Wallet).options(load_only(Wallet.id, Wallet.clinic_id, Wallet.dso_id)).where(Wallet.id == wallet_id).limit(1)
-    )
+    # Load the whole row. Services later in the same request get this same object back
+    # from the session, and refresh() reloads only the columns of its first load; with
+    # load_only here, a refreshed wallet lost its other columns, and reading one made the
+    # async session fail with MissingGreenlet (seen on /kyc-status?refresh=true).
+    wallet = await db.scalar(select(Wallet).where(Wallet.id == wallet_id).limit(1))
 
     if not wallet:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wallet not found")

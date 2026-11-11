@@ -41,7 +41,7 @@
   "app.services.auth.login_attempts": "Raise service domain errors instead of HTTPException; the key builder is a plain function.",
   "app.services.auth.session": "Async start/end of login sessions so login, refresh and logout share one module.",
   "app.services.billing.funding_service": "Async session queries, row locks and commits; await cache invalidation.",
-  "app.services.billing.kyc_service": "Async session for wallet lookups and the KYC status write.",
+  "app.services.billing.kyc_service": "Async session for wallet lookups and the KYC status write; return the written value instead of refreshing a partially loaded wallet.",
   "app.services.billing.wallet_service": "Async session; reload rows expired by journal rollbacks before reading them.",
   "app.services.billing.wallet_transfer_service": "Async session; capture the transfer id before provider calls that may roll back; post balances on result=true with a TX_ID (no extra settlement field).",
   "app.services.billing_service": "Wallet-center reads use the async session and async cache.",
