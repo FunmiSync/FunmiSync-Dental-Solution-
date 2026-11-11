@@ -13,3 +13,13 @@ __pycache__/
 .ruff_cache/
 
 bounty-template-work/
+
+# macOS
+.DS_Store
+
+# Local-only artifacts: source snapshots (git history replaces them) and environment dumps
+docs/backups/
+dependency_report.txt
+
+# Any env file, e.g. one downloaded from Render as <service>.env
+*.env

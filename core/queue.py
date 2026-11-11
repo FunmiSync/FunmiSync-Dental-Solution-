@@ -1,22 +1,9 @@
-from redis import Redis
-from redis.asyncio import Redis as AsyncRedis
-from rq import Queue
-from config import settings
+"""Compatibility alias for app.infrastructure.queue.
 
+Edit the canonical module under app/; this path stays for existing imports/jobs.
+Aliasing the module keeps class identities and patched globals shared.
+"""
+import sys
+from app.infrastructure import queue as _implementation
 
-
-redis_client = Redis.from_url(
-    settings.redis_url,
-    decode_responses=True,
-)
-async_redis = AsyncRedis.from_url(
-    settings.redis_url,
-    decode_responses=True,
-)
-
-# create a queue
-appointments_queue = Queue("appointments", connection=redis_client)
-
-
-
-
+sys.modules[__name__] = _implementation

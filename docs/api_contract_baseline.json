@@ -1,0 +1,2946 @@
+{
+  "cookies": [
+    {
+      "httponly": false,
+      "max_age": "REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60",
+      "name": "csrf_token",
+      "path": "/",
+      "samesite": "none",
+      "secure": true
+    },
+    {
+      "httponly": true,
+      "max_age": "REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60",
+      "name": "refresh_token",
+      "path": "/login/refresh",
+      "samesite": "none",
+      "secure": true
+    },
+    {
+      "httponly": true,
+      "max_age": "ACCESS_TOKEN_EXPIRE_MINUTES * 60",
+      "name": "stream_access_token",
+      "path": "/",
+      "samesite": "none",
+      "secure": true
+    }
+  ],
+  "cors": {
+    "allow_credentials": true,
+    "allow_headers": [
+      "Authorization",
+      "Content-Type",
+      "X-CSRF-Token",
+      "X-Webhook-Secret",
+      "Idempotency-Key"
+    ],
+    "allow_methods": [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+      "OPTIONS"
+    ],
+    "allow_origins": "origins",
+    "expose_headers": [
+      "X-Request-ID",
+      "Retry-After"
+    ],
+    "origins": [
+      "https://www.fumisync.com"
+    ]
+  },
+  "format_version": 1,
+  "routes": [
+    {
+      "method": "GET",
+      "options": {},
+      "parameters": [],
+      "path": "/"
+    },
+    {
+      "method": "POST",
+      "options": {
+        "response_model": "dsoout",
+        "status_code": "status.HTTP_201_CREATED"
+      },
+      "parameters": [
+        {
+          "name": "payload",
+          "type": "registerdso"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/DSO/"
+    },
+    {
+      "method": "POST",
+      "options": {
+        "response_model": "clinicout",
+        "status_code": "status.HTTP_201_CREATED"
+      },
+      "parameters": [
+        {
+          "name": "payload",
+          "type": "cliniccreate"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/clinics/"
+    },
+    {
+      "method": "POST",
+      "options": {
+        "response_model": "clinicout",
+        "status_code": "status.HTTP_201_CREATED"
+      },
+      "parameters": [
+        {
+          "name": "dso_id",
+          "type": "UUID"
+        },
+        {
+          "name": "payload",
+          "type": "cliniccreate"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/clinics/dso/{dso_id}"
+    },
+    {
+      "method": "GET",
+      "options": {
+        "response_model": "toroforge_clinic_billing_out"
+      },
+      "parameters": [
+        {
+          "name": "clinic_id",
+          "type": "UUID"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/clinics/{clinic_id}/billing/wallet_center"
+    },
+    {
+      "method": "GET",
+      "options": {
+        "response_model": "sync_log_page_out"
+      },
+      "parameters": [
+        {
+          "name": "clinic_id",
+          "type": "UUID"
+        },
+        {
+          "default": "Query(default=None)",
+          "name": "status",
+          "type": "SyncStatus | None"
+        },
+        {
+          "default": "Query(default=None, max_length=100)",
+          "name": "search",
+          "type": "str | None"
+        },
+        {
+          "default": "Query(default=None)",
+          "name": "date_from",
+          "type": "date | None"
+        },
+        {
+          "default": "Query(default=None)",
+          "name": "date_to",
+          "type": "date | None"
+        },
+        {
+          "default": "Query(default=None)",
+          "name": "cursor",
+          "type": "str | None"
+        },
+        {
+          "default": "Query(default=50, ge=1, le=200)",
+          "name": "limit",
+          "type": "int"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/clinics/{clinic_id}/sync-logs"
+    },
+    {
+      "method": "GET",
+      "options": {},
+      "parameters": [
+        {
+          "name": "clinic_id",
+          "type": "UUID"
+        }
+      ],
+      "path": "/clinics/{clinic_id}/sync-logs/stream"
+    },
+    {
+      "method": "GET",
+      "options": {
+        "response_model": "sync_log_detail_out"
+      },
+      "parameters": [
+        {
+          "name": "clinic_id",
+          "type": "UUID"
+        },
+        {
+          "name": "sync_log_id",
+          "type": "UUID"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/clinics/{clinic_id}/sync-logs/{sync_log_id}"
+    },
+    {
+      "method": "GET",
+      "options": {
+        "response_model": "team_member_list_out"
+      },
+      "parameters": [
+        {
+          "name": "clinic_id",
+          "type": "UUID"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/clinics/{clinic_id}/team"
+    },
+    {
+      "method": "GET",
+      "options": {
+        "response_model": "toroforge_dso_billing_out"
+      },
+      "parameters": [
+        {
+          "name": "dso_id",
+          "type": "UUID"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/dsos/{dso_id}/billing/wallet_center"
+    },
+    {
+      "method": "GET",
+      "options": {
+        "response_model": "dso_clinic_list_out"
+      },
+      "parameters": [
+        {
+          "name": "dso_id",
+          "type": "UUID"
+        },
+        {
+          "default": "Query(default=None, max_length=100)",
+          "name": "search",
+          "type": "str | None"
+        },
+        {
+          "default": "Query(default=None, alias='status')",
+          "name": "status_filter",
+          "type": "Literal['active', 'disabled'] | None"
+        },
+        {
+          "default": "Query(default=50, ge=1, le=200)",
+          "name": "limit",
+          "type": "int"
+        },
+        {
+          "default": "Query(default=0, ge=0)",
+          "name": "offset",
+          "type": "int"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/dsos/{dso_id}/clinics"
+    },
+    {
+      "method": "PATCH",
+      "options": {
+        "response_model": "dso_clinic_disabled_out",
+        "status_code": "status.HTTP_200_OK"
+      },
+      "parameters": [
+        {
+          "name": "dso_id",
+          "type": "UUID"
+        },
+        {
+          "name": "clinic_id",
+          "type": "UUID"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/dsos/{dso_id}/clinics/{clinic_id}/disable"
+    },
+    {
+      "method": "GET",
+      "options": {
+        "response_model": "sync_log_page_out"
+      },
+      "parameters": [
+        {
+          "name": "dso_id",
+          "type": "UUID"
+        },
+        {
+          "default": "Query(default=None)",
+          "name": "clinic_id",
+          "type": "UUID | None"
+        },
+        {
+          "default": "Query(default=None)",
+          "name": "status",
+          "type": "SyncStatus | None"
+        },
+        {
+          "default": "Query(default=None, max_length=100)",
+          "name": "search",
+          "type": "str | None"
+        },
+        {
+          "default": "Query(default=None)",
+          "name": "date_from",
+          "type": "date | None"
+        },
+        {
+          "default": "Query(default=None)",
+          "name": "date_to",
+          "type": "date | None"
+        },
+        {
+          "default": "Query(default=None)",
+          "name": "cursor",
+          "type": "str | None"
+        },
+        {
+          "default": "Query(default=None)",
+          "name": "limit",
+          "type": "int"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/dsos/{dso_id}/sync-logs"
+    },
+    {
+      "method": "GET",
+      "options": {},
+      "parameters": [
+        {
+          "name": "dso_id",
+          "type": "UUID"
+        }
+      ],
+      "path": "/dsos/{dso_id}/sync-logs/stream"
+    },
+    {
+      "method": "GET",
+      "options": {
+        "response_model": "sync_log_detail_out"
+      },
+      "parameters": [
+        {
+          "name": "dso_id",
+          "type": "UUID"
+        },
+        {
+          "name": "sync_log_id",
+          "type": "UUID"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/dsos/{dso_id}/sync-logs/{sync_log_id}"
+    },
+    {
+      "method": "GET",
+      "options": {
+        "response_model": "team_member_list_out"
+      },
+      "parameters": [
+        {
+          "name": "dso_id",
+          "type": "UUID"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/dsos/{dso_id}/team"
+    },
+    {
+      "method": "POST",
+      "options": {
+        "status_code": "status.HTTP_201_CREATED"
+      },
+      "parameters": [
+        {
+          "name": "payload",
+          "type": "accept_invite_request"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/invites/accept"
+    },
+    {
+      "method": "POST",
+      "options": {
+        "status_code": "status.HTTP_201_CREATED"
+      },
+      "parameters": [
+        {
+          "name": "clinic_id",
+          "type": "UUID"
+        },
+        {
+          "name": "payload",
+          "type": "create_clinic_invite_request"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/invites/clinic/{clinic_id}"
+    },
+    {
+      "method": "POST",
+      "options": {
+        "response_model": "invite_out",
+        "status_code": "status.HTTP_201_CREATED"
+      },
+      "parameters": [
+        {
+          "name": "dso_id",
+          "type": "UUID"
+        },
+        {
+          "name": "payload",
+          "type": "create_dso_invite_request"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/invites/dso/{dso_id}"
+    },
+    {
+      "method": "POST",
+      "options": {
+        "response_model": "loginresponse",
+        "status_code": 200
+      },
+      "parameters": [
+        {
+          "name": "payload",
+          "type": "loginrequest"
+        }
+      ],
+      "path": "/login"
+    },
+    {
+      "method": "POST",
+      "options": {
+        "response_model": "loginresponse",
+        "status_code": "status.HTTP_200_OK"
+      },
+      "parameters": [
+        {
+          "name": "payload",
+          "type": "google_login_request"
+        }
+      ],
+      "path": "/login/google"
+    },
+    {
+      "method": "POST",
+      "options": {
+        "response_model": "refreshresponse",
+        "status_code": 200
+      },
+      "parameters": [
+        {
+          "default": "Cookie(default=None)",
+          "name": "refresh_token",
+          "type": "str | None"
+        },
+        {
+          "default": "Cookie(default=None, alias='csrf_token')",
+          "name": "csrf_cookie",
+          "type": "str | None"
+        },
+        {
+          "default": "Header(default=None, alias='X-CSRF-Token')",
+          "name": "csrf_header",
+          "type": "str | None"
+        }
+      ],
+      "path": "/login/refresh"
+    },
+    {
+      "method": "POST",
+      "options": {
+        "status_code": 200
+      },
+      "parameters": [
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/logout"
+    },
+    {
+      "method": "GET",
+      "options": {
+        "response_model": "my_workspaces_out"
+      },
+      "parameters": [
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/me/workspaces"
+    },
+    {
+      "method": "POST",
+      "options": {
+        "response_model": "userout",
+        "status_code": "status.HTTP_201_CREATED"
+      },
+      "parameters": [
+        {
+          "name": "payload",
+          "type": "usercreate"
+        }
+      ],
+      "path": "/register"
+    },
+    {
+      "method": "POST",
+      "options": {
+        "response_model": "loginresponse",
+        "status_code": "status.HTTP_201_CREATED"
+      },
+      "parameters": [
+        {
+          "name": "payload",
+          "type": "google_register_request"
+        }
+      ],
+      "path": "/register/google"
+    },
+    {
+      "method": "POST",
+      "options": {
+        "response_model": "toroforge_wallet_create_response",
+        "response_model_exclude_none": true,
+        "status_code": "status.HTTP_201_CREATED"
+      },
+      "parameters": [
+        {
+          "name": "clinic_id",
+          "type": "UUID"
+        },
+        {
+          "name": "payload",
+          "type": "toroforge_wallet_create_request"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        },
+        {
+          "default": "Header(..., alias='Idempotency-key')",
+          "name": "idempotency_key",
+          "type": "str"
+        }
+      ],
+      "path": "/toroforge/clinics/{clinic_id}/wallet"
+    },
+    {
+      "method": "POST",
+      "options": {
+        "response_model": "toroforge_wallet_create_response",
+        "response_model_exclude_none": true,
+        "status_code": "status.HTTP_201_CREATED"
+      },
+      "parameters": [
+        {
+          "name": "dso_id",
+          "type": "UUID"
+        },
+        {
+          "name": "clinic_id",
+          "type": "UUID"
+        },
+        {
+          "name": "payload",
+          "type": "toroforge_wallet_create_request"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        },
+        {
+          "default": "Header(..., alias='Idempotency-key')",
+          "name": "idempotency_key",
+          "type": "str"
+        }
+      ],
+      "path": "/toroforge/dsos/{dso_id}/clinics/{clinic_id}/wallet"
+    },
+    {
+      "method": "POST",
+      "options": {
+        "response_model": "toroforge_wallet_transfer_response",
+        "status_code": "status.HTTP_201_CREATED"
+      },
+      "parameters": [
+        {
+          "name": "dso_id",
+          "type": "UUID"
+        },
+        {
+          "name": "clinic_id",
+          "type": "UUID"
+        },
+        {
+          "name": "payload",
+          "type": "toroforge_wallet_transfer_request"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        },
+        {
+          "default": "Header(..., alias='Idempotency-Key')",
+          "name": "idempotency_key",
+          "type": "str"
+        }
+      ],
+      "path": "/toroforge/dsos/{dso_id}/clinics/{clinic_id}/wallet-transfer"
+    },
+    {
+      "method": "POST",
+      "options": {
+        "response_model": "toroforge_wallet_create_response",
+        "response_model_exclude_none": true,
+        "status_code": "status.HTTP_201_CREATED"
+      },
+      "parameters": [
+        {
+          "name": "dso_id",
+          "type": "UUID"
+        },
+        {
+          "name": "payload",
+          "type": "toroforge_wallet_create_request"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        },
+        {
+          "default": "Header(..., alias='Idempotency-key')",
+          "name": "idempotency_key",
+          "type": "str"
+        }
+      ],
+      "path": "/toroforge/dsos/{dso_id}/wallet"
+    },
+    {
+      "method": "POST",
+      "options": {
+        "response_model": "toroforge_wallet_funding_initialize_response",
+        "status_code": "status.HTTP_201_CREATED"
+      },
+      "parameters": [
+        {
+          "name": "wallet_id",
+          "type": "UUID"
+        },
+        {
+          "name": "payload",
+          "type": "toroforge_wallet_funding_initialize_request"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        },
+        {
+          "default": "Header(..., alias='Idempotency-Key')",
+          "name": "idempotency_key",
+          "type": "str"
+        }
+      ],
+      "path": "/toroforge/wallets/{wallet_id}/funding"
+    },
+    {
+      "method": "POST",
+      "options": {
+        "response_model": "toroforge_wallet_deposit_verify_response",
+        "status_code": "status.HTTP_200_OK"
+      },
+      "parameters": [
+        {
+          "name": "wallet_id",
+          "type": "UUID"
+        },
+        {
+          "name": "payment_transaction_id",
+          "type": "UUID"
+        },
+        {
+          "name": "payload",
+          "type": "toroforge_wallet_deposit_verify_request"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/toroforge/wallets/{wallet_id}/funding/{payment_transaction_id}/verify-deposit"
+    },
+    {
+      "method": "POST",
+      "options": {
+        "status_code": 200
+      },
+      "parameters": [
+        {
+          "name": "wallet_id",
+          "type": "UUID"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/toroforge/wallets/{wallet_id}/kyc"
+    },
+    {
+      "method": "GET",
+      "options": {
+        "response_model": "toroforge_wallet_kyc_status_response",
+        "status_code": "status.HTTP_200_OK"
+      },
+      "parameters": [
+        {
+          "name": "wallet_id",
+          "type": "UUID"
+        },
+        {
+          "default": "Query(default=False)",
+          "name": "refresh",
+          "type": "bool"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/toroforge/wallets/{wallet_id}/kyc-status"
+    },
+    {
+      "method": "POST",
+      "options": {
+        "status_code": "status.HTTP_200_OK"
+      },
+      "parameters": [
+        {
+          "name": "wallet_id",
+          "type": "UUID"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        },
+        {
+          "default": "Cookie(default=None, alias='csrf_token')",
+          "name": "csrf_cookie",
+          "type": "str | None"
+        },
+        {
+          "default": "Header(default=None, alias='X-CSRF-Token')",
+          "name": "csrf_header",
+          "type": "str | None"
+        }
+      ],
+      "path": "/toroforge/wallets/{wallet_id}/password/rotate"
+    },
+    {
+      "method": "GET",
+      "options": {
+        "response_model": "webhook_config_out"
+      },
+      "parameters": [
+        {
+          "name": "clinic_id",
+          "type": "UUID"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/webhook/{clinic_id}/webhook-config"
+    },
+    {
+      "method": "POST",
+      "options": {
+        "response_model": "webhook_response",
+        "status_code": 202
+      },
+      "parameters": [
+        {
+          "name": "crm_type",
+          "type": "str"
+        },
+        {
+          "name": "clinic_id",
+          "type": "UUID"
+        },
+        {
+          "name": "payload",
+          "type": "Webhook_requests"
+        }
+      ],
+      "path": "/webhook/{crm_type}/{clinic_id}"
+    }
+  ],
+  "schemas": {
+    "AppointmentRequest": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "Note": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "calendar_id": {
+          "required": true,
+          "type": "str"
+        },
+        "clinic_timezone": {
+          "required": true,
+          "type": "str"
+        },
+        "commslog": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "contact_id": {
+          "required": true,
+          "type": "str"
+        },
+        "date_str": {
+          "required": true,
+          "type": "str"
+        },
+        "end_str": {
+          "required": true,
+          "type": "str"
+        },
+        "event_id": {
+          "required": true,
+          "type": "str"
+        },
+        "pat_Num": {
+          "required": true,
+          "type": "int"
+        },
+        "pat_id": {
+          "required": true,
+          "type": "UUID"
+        },
+        "pop_up": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "start_str": {
+          "required": true,
+          "type": "str"
+        },
+        "status": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "Appointments_create": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "AptDateTime": {
+          "required": true,
+          "type": "str"
+        },
+        "AptStatus": {
+          "required": true,
+          "type": "str"
+        },
+        "Note": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "Op": {
+          "required": true,
+          "type": "str"
+        },
+        "PatNum": {
+          "required": true,
+          "type": "int"
+        },
+        "Pattern": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "Appointments_update": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "AptDateTime": {
+          "required": true,
+          "type": "str"
+        },
+        "AptStatus": {
+          "required": true,
+          "type": "str"
+        },
+        "Op": {
+          "required": true,
+          "type": "str"
+        },
+        "Pattern": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "Webhook_requests": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "BirthDate": {
+          "required": true,
+          "type": "str"
+        },
+        "Date": {
+          "required": true,
+          "type": "str"
+        },
+        "Email": {
+          "required": true,
+          "type": "EmailStr"
+        },
+        "Gender": {
+          "required": true,
+          "type": "str"
+        },
+        "Note": {
+          "required": true,
+          "type": "str"
+        },
+        "Notes": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "PriProv": {
+          "required": true,
+          "type": "str"
+        },
+        "WirelessPhone": {
+          "required": true,
+          "type": "str"
+        },
+        "calendar_id": {
+          "required": true,
+          "type": "str"
+        },
+        "commslog": {
+          "required": true,
+          "type": "str"
+        },
+        "contact_id": {
+          "required": true,
+          "type": "str"
+        },
+        "end_time": {
+          "required": true,
+          "type": "str"
+        },
+        "event_id": {
+          "required": true,
+          "type": "str"
+        },
+        "first_name": {
+          "required": true,
+          "type": "str"
+        },
+        "last_name": {
+          "required": true,
+          "type": "str"
+        },
+        "pop_up": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "start_time": {
+          "required": true,
+          "type": "str"
+        },
+        "status": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "accept_invite_request": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "token": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "cliniccreate": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "calendar_id": {
+          "required": true,
+          "type": "str"
+        },
+        "clinic_name": {
+          "required": true,
+          "type": "str"
+        },
+        "clinic_number": {
+          "required": true,
+          "type": "int"
+        },
+        "clinic_timezone": {
+          "required": true,
+          "type": "str"
+        },
+        "crm_api_key": {
+          "required": true,
+          "type": "str"
+        },
+        "crm_type": {
+          "required": true,
+          "type": "str"
+        },
+        "location_id": {
+          "required": true,
+          "type": "str"
+        },
+        "od_customer_key": {
+          "required": true,
+          "type": "str"
+        },
+        "od_developer_key": {
+          "required": true,
+          "type": "str"
+        },
+        "operatory_calendar_map": {
+          "default": "Field()",
+          "required": true,
+          "type": "Dict[str, List[operatorymap]]"
+        }
+      }
+    },
+    "clinicout": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "clinic_name": {
+          "required": true,
+          "type": "str"
+        },
+        "id": {
+          "required": true,
+          "type": "UUID"
+        }
+      }
+    },
+    "create_appointment_ghl": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "appointmentStatus": {
+          "required": true,
+          "type": "str"
+        },
+        "assignedUserId": {
+          "required": true,
+          "type": "str"
+        },
+        "calendarId": {
+          "required": true,
+          "type": "str"
+        },
+        "contactId": {
+          "required": true,
+          "type": "str"
+        },
+        "endTime": {
+          "required": true,
+          "type": "str"
+        },
+        "ignoreFreeSlotValidation": {
+          "required": true,
+          "type": "Literal[True]"
+        },
+        "locationId": {
+          "required": true,
+          "type": "str"
+        },
+        "startTime": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "create_clinic_invite_request": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "email": {
+          "required": true,
+          "type": "EmailStr"
+        },
+        "role": {
+          "required": true,
+          "type": "Literal['manager', 'staff']"
+        }
+      }
+    },
+    "create_commslogs": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "PatNum": {
+          "required": true,
+          "type": "int"
+        },
+        "commlogs": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "create_contact_ghl": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "dateOfBirth": {
+          "required": true,
+          "type": "Datestr"
+        },
+        "email": {
+          "required": true,
+          "type": "EmailStr"
+        },
+        "firstName": {
+          "required": true,
+          "type": "str"
+        },
+        "lastName": {
+          "required": true,
+          "type": "str"
+        },
+        "phone": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "create_dso_invite_request": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "email": {
+          "required": true,
+          "type": "EmailStr"
+        },
+        "role": {
+          "required": true,
+          "type": "Literal['manager', 'staff']"
+        }
+      }
+    },
+    "create_pop_ups": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "PatNum": {
+          "required": true,
+          "type": "int"
+        },
+        "pop_ups": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "dso_clinic_actions_out": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "can_disable": {
+          "required": true,
+          "type": "bool"
+        },
+        "can_edit": {
+          "required": true,
+          "type": "bool"
+        },
+        "can_view": {
+          "required": true,
+          "type": "bool"
+        }
+      }
+    },
+    "dso_clinic_disabled_out": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "clinic_name": {
+          "required": true,
+          "type": "str"
+        },
+        "disabled_at": {
+          "required": true,
+          "type": "datetime"
+        },
+        "id": {
+          "required": true,
+          "type": "UUID"
+        },
+        "status": {
+          "required": true,
+          "type": "Literal['disabled']"
+        }
+      }
+    },
+    "dso_clinic_list_out": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "generated_at": {
+          "required": true,
+          "type": "datetime"
+        },
+        "items": {
+          "required": true,
+          "type": "List[dso_clinic_row_out]"
+        },
+        "summary": {
+          "required": true,
+          "type": "dso_clinic_summary_Out"
+        },
+        "visible_count": {
+          "required": true,
+          "type": "int"
+        }
+      }
+    },
+    "dso_clinic_row_out": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "actions": {
+          "required": true,
+          "type": "dso_clinic_actions_out"
+        },
+        "attention_reason": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "clinic_name": {
+          "required": true,
+          "type": "str"
+        },
+        "clinic_number": {
+          "required": true,
+          "type": "int"
+        },
+        "clinic_timezone": {
+          "required": true,
+          "type": "str"
+        },
+        "disabled_at": {
+          "default": null,
+          "required": false,
+          "type": "Optional[datetime]"
+        },
+        "id": {
+          "required": true,
+          "type": "UUID"
+        },
+        "last_sync_at": {
+          "default": null,
+          "required": false,
+          "type": "Optional[datetime]"
+        },
+        "needs_attention": {
+          "required": true,
+          "type": "bool"
+        },
+        "status": {
+          "required": true,
+          "type": "str"
+        },
+        "synced_today": {
+          "required": true,
+          "type": "int"
+        }
+      }
+    },
+    "dso_clinic_summary_Out": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "active_clinics": {
+          "required": true,
+          "type": "int"
+        },
+        "disabled_clinics": {
+          "required": true,
+          "type": "int"
+        },
+        "needs_attention": {
+          "required": true,
+          "type": "int"
+        },
+        "synced_today": {
+          "required": true,
+          "type": "int"
+        },
+        "total_clinics": {
+          "required": true,
+          "type": "int"
+        }
+      }
+    },
+    "dsoout": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "id": {
+          "required": true,
+          "type": "UUID"
+        },
+        "name": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "google_login_request": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "credential": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "google_register_request": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "credential": {
+          "required": true,
+          "type": "str"
+        },
+        "username": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "invite_out": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "expires_at": {
+          "required": true,
+          "type": "str"
+        },
+        "invite_token": {
+          "required": true,
+          "type": "str"
+        },
+        "message": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "loginrequest": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "email": {
+          "required": true,
+          "type": "EmailStr"
+        },
+        "password": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "loginresponse": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "access_token": {
+          "required": true,
+          "type": "str"
+        },
+        "csrf_token": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "logoutresponse": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "message": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "my_workspaces_out": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "default_workspace": {
+          "default": null,
+          "required": false,
+          "type": "Optional[workspace_ref]"
+        },
+        "user_id": {
+          "required": true,
+          "type": "UUID"
+        },
+        "username": {
+          "required": true,
+          "type": "str"
+        },
+        "workspace_count": {
+          "required": true,
+          "type": "int"
+        },
+        "workspaces": {
+          "required": true,
+          "type": "List[workspace_item]"
+        }
+      }
+    },
+    "operatorymap": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "calendar_id": {
+          "required": true,
+          "type": "str"
+        },
+        "operatories": {
+          "required": true,
+          "type": "List[int]"
+        }
+      }
+    },
+    "patient_model": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "Address": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "Birthdate": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "Email": {
+          "default": null,
+          "required": false,
+          "type": "Optional[EmailStr]"
+        },
+        "FName": {
+          "required": true,
+          "type": "str"
+        },
+        "Gender": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "LName": {
+          "required": true,
+          "type": "str"
+        },
+        "WirelessPhone": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "position": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        }
+      }
+    },
+    "refreshresponse": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "access_token": {
+          "required": true,
+          "type": "str"
+        },
+        "csrf_token": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "registerdso": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "name": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "sync_log_clinic_option_out": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "id": {
+          "required": true,
+          "type": "UUID"
+        },
+        "name": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "sync_log_detail_out": {
+      "bases": [
+        "sync_log_row_out"
+      ],
+      "fields": {
+        "appointment_id": {
+          "required": true,
+          "type": "Optional[UUID]"
+        },
+        "appointment_status": {
+          "required": true,
+          "type": "str"
+        },
+        "completed_at": {
+          "default": null,
+          "required": false,
+          "type": "Optional[datetime]"
+        },
+        "inbound_event_id": {
+          "required": true,
+          "type": "Optional[UUID]"
+        },
+        "pat_id": {
+          "default": null,
+          "required": false,
+          "type": "Optional[UUID]"
+        },
+        "payload": {
+          "default": null,
+          "required": false,
+          "type": "Optional[Dict[str, Any]]"
+        }
+      }
+    },
+    "sync_log_page_out": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "clinics": {
+          "required": true,
+          "type": "List[sync_log_clinic_option_out]"
+        },
+        "generated_at": {
+          "required": true,
+          "type": "datetime"
+        },
+        "items": {
+          "required": true,
+          "type": "List[sync_log_row_out]"
+        },
+        "next_cursor": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "summary": {
+          "required": true,
+          "type": "sync_log_summary_out"
+        },
+        "visible_count": {
+          "required": true,
+          "type": "int"
+        }
+      }
+    },
+    "sync_log_row_out": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "apt_num": {
+          "default": null,
+          "required": false,
+          "type": "Optional[int]"
+        },
+        "attempt_count": {
+          "required": true,
+          "type": "int"
+        },
+        "clinic_id": {
+          "required": true,
+          "type": "UUID"
+        },
+        "clinic_name": {
+          "required": true,
+          "type": "str"
+        },
+        "direction": {
+          "required": true,
+          "type": "Literal['crm_to_od', 'od_to_crm']"
+        },
+        "direction_label": {
+          "required": true,
+          "type": "str"
+        },
+        "event_id": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "id": {
+          "required": true,
+          "type": "UUID"
+        },
+        "operation": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "patient_name": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "reason": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "record_label": {
+          "required": true,
+          "type": "str"
+        },
+        "started_at": {
+          "required": true,
+          "type": "datetime"
+        },
+        "status": {
+          "required": true,
+          "type": "Literal['queued', 'processing', 'retrying', 'processed', 'failed']"
+        },
+        "status_label": {
+          "required": true,
+          "type": "str"
+        },
+        "what_happened": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "sync_log_summary_out": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "failed": {
+          "required": true,
+          "type": "int"
+        },
+        "in_progress": {
+          "required": true,
+          "type": "int"
+        },
+        "needs_attention": {
+          "required": true,
+          "type": "int"
+        },
+        "synced_today": {
+          "required": true,
+          "type": "int"
+        }
+      }
+    },
+    "team_member_list_out": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "active_count": {
+          "required": true,
+          "type": "int"
+        },
+        "generated_at": {
+          "required": true,
+          "type": "datetime"
+        },
+        "items": {
+          "required": true,
+          "type": "List[team_member_row_out]"
+        }
+      }
+    },
+    "team_member_row_out": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "email": {
+          "required": true,
+          "type": "str"
+        },
+        "joined_at": {
+          "required": true,
+          "type": "datetime"
+        },
+        "role": {
+          "required": true,
+          "type": "Literal['admin', 'manager', 'staff']"
+        },
+        "scope": {
+          "required": true,
+          "type": "Literal['dso', 'clinic']"
+        },
+        "user_id": {
+          "required": true,
+          "type": "UUID"
+        }
+      }
+    },
+    "toroforge_billing_subscription_out": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "amount": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "amount_display": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "amount_minor": {
+          "required": true,
+          "type": "int"
+        },
+        "currency": {
+          "required": true,
+          "type": "str"
+        },
+        "next_billing_at": {
+          "default": null,
+          "required": false,
+          "type": "Optional[datetime]"
+        },
+        "payment_provider": {
+          "required": true,
+          "type": "str"
+        },
+        "plan_code": {
+          "required": true,
+          "type": "str"
+        },
+        "status": {
+          "required": true,
+          "type": "str"
+        },
+        "subscription_id": {
+          "required": true,
+          "type": "UUID"
+        }
+      }
+    },
+    "toroforge_clinic_billing_out": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "active_subscription": {
+          "default": null,
+          "required": false,
+          "type": "Optional[toroforge_billing_subscription_out]"
+        },
+        "available_balance": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "available_balance_display": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "available_balance_minor": {
+          "default": 0,
+          "required": false,
+          "type": "int"
+        },
+        "billing_health_reason": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "billing_health_status": {
+          "default": null,
+          "required": false,
+          "type": "Optional[Literal['good', 'attention']]"
+        },
+        "clinic_id": {
+          "required": true,
+          "type": "UUID"
+        },
+        "clinic_wallet": {
+          "default": null,
+          "required": false,
+          "type": "Optional[toroforge_wallet_read_item_out]"
+        },
+        "dso_id": {
+          "default": null,
+          "required": false,
+          "type": "Optional[UUID]"
+        },
+        "failed_payment_count": {
+          "default": 0,
+          "required": false,
+          "type": "int"
+        },
+        "generated_at": {
+          "default": null,
+          "required": false,
+          "type": "Optional[datetime]"
+        },
+        "has_wallet": {
+          "required": true,
+          "type": "bool"
+        },
+        "message": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "next_action": {
+          "default": null,
+          "required": false,
+          "type": "Optional[Literal['create_wallet']]"
+        },
+        "parent_wallet_label": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "premium_charges_this_month": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "premium_charges_this_month_display": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "premium_charges_this_month_minor": {
+          "default": 0,
+          "required": false,
+          "type": "int"
+        },
+        "recent_ledger": {
+          "default": "Field(default_factory=list)",
+          "required": false,
+          "type": "List[toroforge_wallet_ledger_row_out]"
+        },
+        "wallet_inflow_this_month": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "wallet_inflow_this_month_display": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "wallet_inflow_this_month_minor": {
+          "default": 0,
+          "required": false,
+          "type": "int"
+        }
+      }
+    },
+    "toroforge_dso_billing_out": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "active_subscription": {
+          "default": null,
+          "required": false,
+          "type": "Optional[toroforge_billing_subscription_out]"
+        },
+        "available_balance": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "available_balance_display": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "available_balance_minor": {
+          "default": 0,
+          "required": false,
+          "type": "int"
+        },
+        "billing_health_reason": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "billing_health_status": {
+          "default": null,
+          "required": false,
+          "type": "Optional[Literal['good', 'attention']]"
+        },
+        "clinic_wallet_count": {
+          "default": 0,
+          "required": false,
+          "type": "int"
+        },
+        "clinic_wallets": {
+          "default": "Field(default_factory=list)",
+          "required": false,
+          "type": "List[toroforge_wallet_read_item_out]"
+        },
+        "dso_id": {
+          "required": true,
+          "type": "UUID"
+        },
+        "failed_payment_count": {
+          "default": 0,
+          "required": false,
+          "type": "int"
+        },
+        "generated_at": {
+          "default": null,
+          "required": false,
+          "type": "Optional[datetime]"
+        },
+        "has_wallet": {
+          "required": true,
+          "type": "bool"
+        },
+        "message": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "next_action": {
+          "default": null,
+          "required": false,
+          "type": "Optional[Literal['create_wallet']]"
+        },
+        "premium_charges_this_month": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "premium_charges_this_month_display": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "premium_charges_this_month_minor": {
+          "default": 0,
+          "required": false,
+          "type": "int"
+        },
+        "recent_ledger": {
+          "default": "Field(default_factory=list)",
+          "required": false,
+          "type": "List[toroforge_wallet_ledger_row_out]"
+        },
+        "treasury_wallet": {
+          "default": null,
+          "required": false,
+          "type": "Optional[toroforge_wallet_read_item_out]"
+        },
+        "wallet_inflow_this_month": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "wallet_inflow_this_month_display": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "wallet_inflow_this_month_minor": {
+          "default": 0,
+          "required": false,
+          "type": "int"
+        }
+      }
+    },
+    "toroforge_kyc_link_response": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "external_wallet_address": {
+          "required": true,
+          "type": "str"
+        },
+        "kyc_url": {
+          "required": true,
+          "type": "str"
+        },
+        "wallet_id": {
+          "required": true,
+          "type": "UUID"
+        }
+      }
+    },
+    "toroforge_kyc_submit_request": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "address": {
+          "default": "Field(min_length=1, max_length=255)",
+          "required": true,
+          "type": "str"
+        },
+        "bvn": {
+          "default": "Field(min_length=1, max_length=32)",
+          "required": true,
+          "type": "str"
+        },
+        "currency": {
+          "default": "Field(min_length=1, max_length=16)",
+          "required": true,
+          "type": "str"
+        },
+        "dob": {
+          "required": true,
+          "type": "Datestr"
+        },
+        "first_name": {
+          "default": "Field(min_length=1, max_length=100)",
+          "required": true,
+          "type": "str"
+        },
+        "last_name": {
+          "default": "Field(min_length=1, max_length=100)",
+          "required": true,
+          "type": "str"
+        },
+        "middle_name": {
+          "default": "Field(default=None, max_length=100)",
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "phone_number": {
+          "default": "Field(min_length=1, max_length=32)",
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "toroforge_kyc_submit_response": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "message": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "provider_response": {
+          "required": true,
+          "type": "Dict[str, Any]"
+        },
+        "result": {
+          "required": true,
+          "type": "bool"
+        },
+        "wallet_id": {
+          "required": true,
+          "type": "UUID"
+        }
+      }
+    },
+    "toroforge_wallet_create_request": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "username": {
+          "default": "Field(min_length=1, max_length=128)",
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "toroforge_wallet_create_response": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "clinic_id": {
+          "default": null,
+          "required": false,
+          "type": "Optional[UUID]"
+        },
+        "dso_id": {
+          "default": null,
+          "required": false,
+          "type": "Optional[UUID]"
+        },
+        "external_wallet_address": {
+          "required": true,
+          "type": "str"
+        },
+        "external_wallet_username": {
+          "required": true,
+          "type": "str"
+        },
+        "generated_password": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "scope_type": {
+          "required": true,
+          "type": "Literal['clinic', 'dso']"
+        },
+        "wallet_id": {
+          "required": true,
+          "type": "UUID"
+        }
+      }
+    },
+    "toroforge_wallet_deposit_verify_request": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "txid": {
+          "default": "Field(min_length=1, max_length=128)",
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "toroforge_wallet_deposit_verify_response": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "currency": {
+          "required": true,
+          "type": "str"
+        },
+        "ledger_entry_id": {
+          "required": true,
+          "type": "UUID"
+        },
+        "new_cached_balance_minor": {
+          "required": true,
+          "type": "int"
+        },
+        "payment_transaction_id": {
+          "required": true,
+          "type": "UUID"
+        },
+        "provider_response": {
+          "required": true,
+          "type": "Dict[str, Any]"
+        },
+        "status": {
+          "required": true,
+          "type": "str"
+        },
+        "txid": {
+          "required": true,
+          "type": "str"
+        },
+        "wallet_id": {
+          "required": true,
+          "type": "UUID"
+        }
+      }
+    },
+    "toroforge_wallet_funding_initialize_request": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "amount": {
+          "default": "Field(min_length=1, max_length=32)",
+          "required": true,
+          "type": "str"
+        },
+        "cancel_url": {
+          "default": "Field(min_length=1, max_length=2048)",
+          "required": true,
+          "type": "str"
+        },
+        "currency": {
+          "default": "Field(min_length=1, max_length=16)",
+          "required": true,
+          "type": "str"
+        },
+        "description": {
+          "default": "Field(default=None, max_length=500)",
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "payer_address": {
+          "default": "Field(default=None, max_length=255)",
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "payer_city": {
+          "default": "Field(default=None, max_length=100)",
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "payer_country": {
+          "default": "Field(default=None, max_length=100)",
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "payer_name": {
+          "default": "Field(default=None, max_length=255)",
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "payer_phone": {
+          "default": "Field(default=None, max_length=32)",
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "payer_state": {
+          "default": "Field(default=None, max_length=100)",
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "payer_zipcode": {
+          "default": "Field(default=None, max_length=32)",
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "payment_type": {
+          "required": true,
+          "type": "Literal['card', 'bank']"
+        },
+        "success_url": {
+          "default": "Field(min_length=1, max_length=2048)",
+          "required": true,
+          "type": "str"
+        },
+        "token": {
+          "default": "Field(default=None, max_length=16)",
+          "required": false,
+          "type": "Optional[str]"
+        }
+      }
+    },
+    "toroforge_wallet_funding_initialize_response": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "amount_minor": {
+          "default": null,
+          "required": false,
+          "type": "Optional[int]"
+        },
+        "external_payment_id": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "ledger_entry_id": {
+          "default": null,
+          "required": false,
+          "type": "Optional[UUID]"
+        },
+        "payment_transaction_id": {
+          "required": true,
+          "type": "UUID"
+        },
+        "provider_response": {
+          "required": true,
+          "type": "Dict[str, Any]"
+        },
+        "status": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "toroforge_wallet_kyc_status_response": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "provider": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "verified": {
+          "required": true,
+          "type": "bool"
+        },
+        "wallet_id": {
+          "required": true,
+          "type": "UUID"
+        }
+      }
+    },
+    "toroforge_wallet_ledger_row_out": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "amount": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "amount_display": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "amount_minor": {
+          "required": true,
+          "type": "int"
+        },
+        "balance_after": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "balance_after_display": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "balance_after_minor": {
+          "default": null,
+          "required": false,
+          "type": "Optional[int]"
+        },
+        "counterparty_clinic_id": {
+          "default": null,
+          "required": false,
+          "type": "Optional[UUID]"
+        },
+        "counterparty_clinic_name": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "counterparty_wallet_id": {
+          "default": null,
+          "required": false,
+          "type": "Optional[UUID]"
+        },
+        "counterparty_wallet_label": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "created_at": {
+          "required": true,
+          "type": "datetime"
+        },
+        "currency": {
+          "required": true,
+          "type": "str"
+        },
+        "direction": {
+          "required": true,
+          "type": "Literal['debit', 'credit']"
+        },
+        "event_label": {
+          "required": true,
+          "type": "str"
+        },
+        "event_subtitle": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "event_type": {
+          "required": true,
+          "type": "str"
+        },
+        "ledger_entry_id": {
+          "required": true,
+          "type": "UUID"
+        },
+        "posted_at": {
+          "default": null,
+          "required": false,
+          "type": "Optional[datetime]"
+        },
+        "reference_id": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "reference_type": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "status": {
+          "required": true,
+          "type": "str"
+        },
+        "wallet_id": {
+          "required": true,
+          "type": "UUID"
+        },
+        "wallet_label": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "toroforge_wallet_read_item_out": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "auto_debit_enabled": {
+          "required": true,
+          "type": "bool"
+        },
+        "available_balance": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "available_balance_display": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "available_balance_minor": {
+          "required": true,
+          "type": "int"
+        },
+        "clinic_id": {
+          "default": null,
+          "required": false,
+          "type": "Optional[UUID]"
+        },
+        "clinic_name": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "currency": {
+          "required": true,
+          "type": "str"
+        },
+        "dso_id": {
+          "default": null,
+          "required": false,
+          "type": "Optional[UUID]"
+        },
+        "external_wallet_address": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "external_wallet_username": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "last_balance_sync_at": {
+          "default": null,
+          "required": false,
+          "type": "Optional[datetime]"
+        },
+        "status": {
+          "required": true,
+          "type": "str"
+        },
+        "wallet_id": {
+          "required": true,
+          "type": "UUID"
+        },
+        "wallet_label": {
+          "required": true,
+          "type": "str"
+        },
+        "wallet_type": {
+          "required": true,
+          "type": "Literal['dso_treasury', 'clinic']"
+        }
+      }
+    },
+    "toroforge_wallet_transfer_request": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "amount": {
+          "default": "Field(min_length=1, max_length=32)",
+          "required": true,
+          "type": "str"
+        },
+        "currency": {
+          "default": "Field(min_length=1, max_length=16)",
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "toroforge_wallet_transfer_response": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "amount_minor": {
+          "required": true,
+          "type": "int"
+        },
+        "currency": {
+          "required": true,
+          "type": "str"
+        },
+        "external_transaction_id": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "from_wallet_id": {
+          "default": null,
+          "required": false,
+          "type": "Optional[UUID | str]"
+        },
+        "provider_response": {
+          "default": null,
+          "required": false,
+          "type": "Optional[Dict[str, Any]]"
+        },
+        "receiver_ledger_entry_id": {
+          "default": null,
+          "required": false,
+          "type": "Optional[UUID | str]"
+        },
+        "receiver_new_cached_balance_minor": {
+          "default": null,
+          "required": false,
+          "type": "Optional[int]"
+        },
+        "reused": {
+          "default": false,
+          "required": false,
+          "type": "bool"
+        },
+        "sender_ledger_entry_id": {
+          "default": null,
+          "required": false,
+          "type": "Optional[UUID | str]"
+        },
+        "sender_new_cached_balance_minor": {
+          "default": null,
+          "required": false,
+          "type": "Optional[int]"
+        },
+        "status": {
+          "required": true,
+          "type": "str"
+        },
+        "to_wallet_id": {
+          "default": null,
+          "required": false,
+          "type": "Optional[UUID | str]"
+        },
+        "wallet_transfer_id": {
+          "required": true,
+          "type": "UUID | str"
+        }
+      }
+    },
+    "update_appointment_ghl": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "appointmentStatus": {
+          "required": true,
+          "type": "str"
+        },
+        "assignedUserId": {
+          "required": true,
+          "type": "str"
+        },
+        "calendarId": {
+          "required": true,
+          "type": "str"
+        },
+        "endTime": {
+          "required": true,
+          "type": "str"
+        },
+        "ignoreFreeSlotValidation": {
+          "required": true,
+          "type": "Literal[True]"
+        },
+        "locationId": {
+          "required": true,
+          "type": "str"
+        },
+        "startTime": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "usercreate": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "email": {
+          "required": true,
+          "type": "EmailStr"
+        },
+        "password": {
+          "required": true,
+          "type": "str"
+        },
+        "username": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "userout": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "email": {
+          "required": true,
+          "type": "EmailStr"
+        },
+        "id": {
+          "required": true,
+          "type": "UUID"
+        },
+        "username": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "webhook_config_out": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "header_name": {
+          "required": true,
+          "type": "str"
+        },
+        "header_value": {
+          "required": true,
+          "type": "str"
+        },
+        "webhook_url": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    },
+    "webhook_response": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "clinic": {
+          "required": true,
+          "type": "UUID"
+        },
+        "crm_type": {
+          "required": true,
+          "type": "str"
+        },
+        "job_id": {
+          "required": true,
+          "type": "str"
+        },
+        "message": {
+          "required": true,
+          "type": "str"
+        },
+        "status": {
+          "required": true,
+          "type": "int"
+        }
+      }
+    },
+    "workspace_item": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "access_source": {
+          "required": true,
+          "type": "Literal['owner', 'dso_assignment', 'clinic_assignment']"
+        },
+        "clinic_id": {
+          "default": null,
+          "required": false,
+          "type": "Optional[UUID]"
+        },
+        "clinic_name": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "dso_id": {
+          "default": null,
+          "required": false,
+          "type": "Optional[UUID]"
+        },
+        "dso_name": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "role": {
+          "required": true,
+          "type": "Literal['admin', 'manager', 'staff']"
+        },
+        "scope_type": {
+          "required": true,
+          "type": "Literal['dso', 'clinic']"
+        }
+      }
+    },
+    "workspace_ref": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "clinic_id": {
+          "default": null,
+          "required": false,
+          "type": "Optional[UUID]"
+        },
+        "dso_id": {
+          "default": null,
+          "required": false,
+          "type": "Optional[UUID]"
+        },
+        "scope_type": {
+          "required": true,
+          "type": "Literal['dso', 'clinic']"
+        }
+      }
+    }
+  }
+}

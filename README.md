@@ -57,16 +57,129 @@ FumiSync API
 ```txt
 .
 |-- main.py                         # FastAPI app entrypoint
-|-- config.py                       # Environment-backed settings
 |-- requirements.txt                # Python dependencies
+|-- app/
+|   |-- config.py                   # Environment-backed settings
+|   |-- controllers/                # HTTP routes (auth, registration, workspaces, sync, billing)
+|   |-- models/entities.py          # Canonical SQLAlchemy models and enums
+|   |-- schemas/api.py              # API input/output schemas (JSON presentation boundary)
+|   |-- services/                   # Application workflows and billing services
+|   |-- security/                   # JWT, CSRF, encryption, RBAC, webhook verification
+|   |-- infrastructure/             # Database, Redis/cache, providers and workers
 |-- alembic/                        # Database migrations
-|-- api/                            # HTTP routers
-|-- auth/                           # Authentication and security helpers
-|-- billing/toroforge/              # ToroForge clients and wallet services
-|-- core/                           # Database, models, schemas, middleware
-|-- infra/                          # Domain services and sync helpers
-|-- workers/                        # Background worker entrypoints
+|-- tests/                          # Contract, behavior and MVC compatibility checks
+|-- tools/                          # Offline contract inspection and DOCX generation
+|-- docs/                           # Contract snapshots and the master teaching guide
+|-- api/, auth/, billing/, core/, infra/, caches/, sdk/, workers/
+                                   # Compatibility modules; edit canonical files in app/
 ```
+
+The backend uses an MVC-oriented API layout with services: controllers handle HTTP,
+models describe persistence, and schemas define the JSON presentation contract.
+Each layer has one job, and `tests/test_mvc_architecture.py` enforces the rules:
+
+| Layer | Owns | Must not |
+|---|---|---|
+| `controllers/` | Route signature, auth guards, calling one service, shaping the response | Query or commit the database session; import another router module |
+| `security/` | Request guards that raise `HTTPException` (RBAC, wallet access, CSRF, JWT) | Business workflows |
+| `services/` | Business rules, transactions, cache invalidation, provider calls | Raise `HTTPException`; import controllers |
+| `models/`, `schemas/` | Tables and JSON shapes | Workflow logic |
+
+Services report expected failures by raising an error from `app/services/errors.py`
+(`NotFound`, `PermissionDenied`, `InvalidRequest`, ...). `app/controllers/errors.py`
+turns it into the HTTP status and `{"detail": ...}` body, so a route usually looks like:
+
+```python
+@router.post("/accept", status_code=status.HTTP_201_CREATED)
+async def accept_invite(payload: accept_invite_request, current_user: Users = Depends(get_current_user),
+                        db: Session = Depends(get_db)):
+    return invite_service.accept_invite(db, token=payload.token, user=current_user)
+```
+
+### Async database and I/O
+
+The API and the background worker are fully async:
+
+- **Database:** SQLAlchemy `AsyncSession` on `asyncpg` (`app/infrastructure/database.py`).
+  Write queries as `await db.scalar(select(Model).where(...))`; the legacy `db.query()` API
+  is not available on an async session, and a test rejects it in `app/`. Alembic migrations
+  and `tools/` keep a separate synchronous engine (`psycopg2`).
+- **Supabase:** SSL is required, and prepared-statement caching is disabled so the same
+  settings work on the direct connection or session pooler (port 5432) and the transaction
+  pooler (port 6543).
+- **Redis:** caches, rate limits and live-update pub/sub use the async client. RQ has no async
+  client, so jobs are enqueued through `run_in_threadpool`.
+- **CPU-heavy or blocking libraries:** bcrypt and Google token verification run in
+  `run_in_threadpool` so they never freeze the event loop.
+- **Background jobs:** each RQ job runs in its own event loop, so it opens a job-scoped session
+  with `worker_session()` instead of the shared pool.
+
+Two async rules to remember:
+
+1. **Committed objects keep their values** (`expire_on_commit=False`); call
+   `await db.refresh(obj)` when you need fresh database state.
+2. **A rollback expires every row loaded in that transaction**, and reading an expired
+   attribute raises `MissingGreenlet` instead of silently reloading. `ExternalOperations`
+   rolls back when a provider call fails, so code that keeps using a row afterwards calls
+   `await reload_expired(db, row)` first, or captures values such as ids beforehand.
+
+### Resolving stuck provider actions
+
+If ToroForge or OpenDental doesn't answer, the app parks that action as "outcome unknown"
+and refuses to repeat it, so a retry can never pay or book twice. Check the provider, then
+record what really happened (every resolution goes to the audit log):
+
+```bash
+.venv/bin/python -m tools.stuck_operations list
+.venv/bin/python -m tools.stuck_operations resolve <id> --happened --set TX_ID=<from ToroForge> --by "<your name>"
+.venv/bin/python -m tools.stuck_operations resolve <id> --not-done --by "<your name>" --note "<what you checked>"
+```
+
+`--happened` reuses the provider's result (a confirmed transfer posts its balances immediately);
+`--not-done` closes the action so the next attempt calls the provider again. Actions that started
+less than 10 minutes ago may still be running and need `--force`.
+
+Most cases resolve themselves. `auto` asks the providers (read-only) and records the answer
+through the same `resolve`, with `automatic check` as the resolver in the audit log:
+
+```bash
+.venv/bin/python -m tools.stuck_operations auto --dry-run   # report only
+.venv/bin/python -m tools.stuck_operations auto             # run as a Render Cron Job every 15 minutes
+```
+
+| Action | Counts as done when | Counts as not done when (after 1 hour) |
+| --- | --- | --- |
+| DSO→clinic transfer | Toronet shows exactly one unused transfer of that exact amount from the treasury to the clinic since it started | Toronet shows no transfer from the treasury to the clinic since it started |
+| Top-up start | ToroForge has exactly one unlinked payment of that amount for the wallet | ToroForge has none |
+| Wallet key creation | (never; the address was lost) | always: no one can have paid into an address no one received |
+| Wallet name (TNS) | the name points to this wallet | the name is not registered |
+| Wallet password change | ToroForge accepts the new password (it is then saved on the wallet) | (never; a person decides) |
+| OpenDental patient | the patient row already has a PatNum, or exactly one OpenDental patient has the same name and birth date | OpenDental has no patient with that last name and birth date |
+| OpenDental appointment | exactly one appointment for that patient at that time in that operatory | none |
+
+Anything else is left for a person: several matches, a near match (for example a different
+amount), a provider error, comm logs and popups, and OpenDental actions started before request
+details were kept. Under an hour, "nothing found yet" waits for the next run. Requests are kept
+encrypted in `external_operations.request_encrypted` until the result is applied.
+
+`tests/test_mvc_architecture.py` fails if an `async def` never awaits or a session call
+(`commit`, `execute`, ...) is not awaited.
+
+Billing controllers share `controllers/billing/dependencies.py` (per-request ToroForge
+clients) and `controllers/billing/errors.py` (provider-error mapping); the sync-log
+streams share `controllers/sync_logs/streaming.py`.
+
+For example, edit `app/controllers/auth/login.py` for login behavior. The old
+`auth/login.py` path aliases that same module for existing imports. Old queued
+`workers.workers.process_crm_load_job` references still resolve; new code uses
+`app.infrastructure.workers.appointments.process_crm_load_job`. Keep compatibility
+modules until callers and queued jobs have been audited. The full mapping is in
+`docs/mvc_module_map.json`.
+
+The single continuously updated teaching document is
+`docs/FumiSync_Junior_Developer_Guide.docx`, generated from
+`docs/junior_developer_guide.md`. It includes before/after examples, decision
+tradeoffs, tests and independent debugging exercises.
 
 ## Prerequisites
 
@@ -516,7 +629,7 @@ https://fumisync-project.vercel.app/
 
 ## Known Limitations
 
-- Automated tests are not included in this milestone. The supported verification path is the manual reviewer flow above.
+- Automated contract, unit, mocked HTTP and import/metadata/worker compatibility checks are included. They do not replace a real database/provider integration run or browser frontend testing. The manual reviewer flow above requires working service credentials.
 - Premium service wallet debits for eligibility checks, patient messaging, appointment reminders, and AI-assisted calls are part of the billing model and roadmap, but the current submitted backend focuses on wallet creation, KYC, funding, ledger entries, wallet-center reads, and DSO-to-clinic transfers.
 - Full review of wallet funding and transfers requires valid ToroForge/Toronet credentials and provider-side transactions. Without those credentials, reviewers can still inspect the code, run the API, view `/docs`, and validate local setup/migrations.
 - The KYC start endpoint currently returns a two-item response containing the provider KYC URL and wallet password. A future cleanup can wrap this in a named response object.
@@ -553,8 +666,18 @@ alembic revision --autogenerate -m "describe change"
 Check Python syntax quickly:
 
 ```powershell
-python -m compileall api auth billing core infra workers main.py config.py
+python -m compileall app api auth billing core infra caches sdk workers main.py config.py
 ```
+
+Run the automated checks from the project root, using the configured virtual environment:
+
+```powershell
+python -B -m unittest discover -s tests -v
+```
+
+The tests install dummy settings in their process and mock/guard service boundaries;
+they do not execute migrations or real provider transactions. On macOS/Linux, use
+`.venv/bin/python` explicitly if the environment is not activated.
 
 ## Deployment Notes
 
@@ -571,3 +694,13 @@ Recommended production shape:
 ## License
 
 MIT.
+
+## Phase 4 local changes
+
+The master learning guide is [FumiSync_Junior_Developer_Guide.docx](docs/FumiSync_Junior_Developer_Guide.docx), updated in place; Phase 4 is in sections 45–61. It includes code examples, engineering reasoning, recovery scenarios and the rollout sequence. See [local validation](docs/phase_4_validation.md) for evidence and limitations.
+
+**Migration preparation is not deployment.** These workflows now require revision `f4a100000001`. The migration and `tools/backfill_private_data.py` have been prepared but have not been executed against a database. Review the guide's rollout steps and obtain approval for the actual target before running them. Preserve original encryption/HMAC keys.
+
+`GET /health/ready` checks the expected schema plus PostgreSQL/Redis. Configure `CORS_ORIGINS` as explicit JSON origins. Existing API shapes remain checked, while validation, name-prefix searching and uncertain-operation behavior are intentionally stricter.
+
+Deposit verification makes two independent ToroForge checks: the payment lookup by transaction ID (`getfiattransactions_txid`; `result` must be boolean `true` with an exact transaction ID, destination, currency and amount match), and the wallet's real Toronet balance (`getaddrbalance`), which must already include the deposit. The balance is compared under a row lock, so one arrival cannot credit two deposits. DSO-to-clinic transfers follow the same ToroForge contract: a reply with `result: true` and a `TX_ID` means the money moved, so balances post immediately. Both rules follow the provider behavior confirmed by the project owner; live integration remains untested.

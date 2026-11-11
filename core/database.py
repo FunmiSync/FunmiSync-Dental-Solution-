@@ -1,31 +1,9 @@
-from sqlalchemy import create_engine, text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import sessionmaker
-from config import settings
+"""Compatibility alias for app.infrastructure.database.
 
+Edit the canonical module under app/; this path stays for existing imports/jobs.
+Aliasing the module keeps class identities and patched globals shared.
+"""
+import sys
+from app.infrastructure import database as _implementation
 
-SQLALCHEMY_DATABASE_URL = f'postgresql://{settings.database_username}:{settings.database_password}@{settings.database_hostname}:{settings.database_portname}/{settings.database_name}?sslmode=require'
-
-engine = create_engine(SQLALCHEMY_DATABASE_URL, pool_pre_ping=True, pool_recycle= 1800)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-def ping_db() -> tuple[bool, str]:
-    try:
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-        return True, "DB connection OK"
-
-    except SQLAlchemyError as e:
-        return False, f"DB connection FAILED: {e.__class__.__name__}: {e}" 
-    
-print("Connecting to DB:", "connected")
+sys.modules[__name__] = _implementation

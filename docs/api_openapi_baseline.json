@@ -1,0 +1,5062 @@
+{
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "SyncStatus": {
+        "enum": [
+          "queued",
+          "processing",
+          "retrying",
+          "processed",
+          "failed"
+        ],
+        "title": "SyncStatus",
+        "type": "string"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "Webhook_requests": {
+        "properties": {
+          "BirthDate": {
+            "title": "Birthdate",
+            "type": "string"
+          },
+          "Date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "Email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "Gender": {
+            "title": "Gender",
+            "type": "string"
+          },
+          "Note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "Notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "PriProv": {
+            "title": "Priprov",
+            "type": "string"
+          },
+          "WirelessPhone": {
+            "title": "Wirelessphone",
+            "type": "string"
+          },
+          "calendar_id": {
+            "title": "Calendar Id",
+            "type": "string"
+          },
+          "commslog": {
+            "title": "Commslog",
+            "type": "string"
+          },
+          "contact_id": {
+            "title": "Contact Id",
+            "type": "string"
+          },
+          "end_time": {
+            "title": "End Time",
+            "type": "string"
+          },
+          "event_id": {
+            "title": "Event Id",
+            "type": "string"
+          },
+          "first_name": {
+            "title": "First Name",
+            "type": "string"
+          },
+          "last_name": {
+            "title": "Last Name",
+            "type": "string"
+          },
+          "pop_up": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pop Up"
+          },
+          "start_time": {
+            "title": "Start Time",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id",
+          "contact_id",
+          "commslog",
+          "status",
+          "Date",
+          "start_time",
+          "end_time",
+          "first_name",
+          "last_name",
+          "BirthDate",
+          "Gender",
+          "calendar_id",
+          "Note",
+          "WirelessPhone",
+          "Email",
+          "PriProv"
+        ],
+        "title": "Webhook_requests",
+        "type": "object"
+      },
+      "accept_invite_request": {
+        "properties": {
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "accept_invite_request",
+        "type": "object"
+      },
+      "cliniccreate": {
+        "properties": {
+          "calendar_id": {
+            "title": "Calendar Id",
+            "type": "string"
+          },
+          "clinic_name": {
+            "title": "Clinic Name",
+            "type": "string"
+          },
+          "clinic_number": {
+            "title": "Clinic Number",
+            "type": "integer"
+          },
+          "clinic_timezone": {
+            "title": "Clinic Timezone",
+            "type": "string"
+          },
+          "crm_api_key": {
+            "title": "Crm Api Key",
+            "type": "string"
+          },
+          "crm_type": {
+            "title": "Crm Type",
+            "type": "string"
+          },
+          "location_id": {
+            "title": "Location Id",
+            "type": "string"
+          },
+          "od_customer_key": {
+            "title": "Od Customer Key",
+            "type": "string"
+          },
+          "od_developer_key": {
+            "title": "Od Developer Key",
+            "type": "string"
+          },
+          "operatory_calendar_map": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/operatorymap"
+              },
+              "type": "array"
+            },
+            "title": "Operatory Calendar Map",
+            "type": "object"
+          }
+        },
+        "required": [
+          "crm_type",
+          "clinic_name",
+          "clinic_number",
+          "clinic_timezone",
+          "od_developer_key",
+          "od_customer_key",
+          "crm_api_key",
+          "location_id",
+          "calendar_id",
+          "operatory_calendar_map"
+        ],
+        "title": "cliniccreate",
+        "type": "object"
+      },
+      "clinicout": {
+        "properties": {
+          "clinic_name": {
+            "title": "Clinic Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "clinic_name"
+        ],
+        "title": "clinicout",
+        "type": "object"
+      },
+      "create_clinic_invite_request": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "manager",
+              "staff"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "role"
+        ],
+        "title": "create_clinic_invite_request",
+        "type": "object"
+      },
+      "create_dso_invite_request": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "manager",
+              "staff"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "role"
+        ],
+        "title": "create_dso_invite_request",
+        "type": "object"
+      },
+      "dso_clinic_actions_out": {
+        "properties": {
+          "can_disable": {
+            "title": "Can Disable",
+            "type": "boolean"
+          },
+          "can_edit": {
+            "title": "Can Edit",
+            "type": "boolean"
+          },
+          "can_view": {
+            "title": "Can View",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "can_view",
+          "can_edit",
+          "can_disable"
+        ],
+        "title": "dso_clinic_actions_out",
+        "type": "object"
+      },
+      "dso_clinic_disabled_out": {
+        "properties": {
+          "clinic_name": {
+            "title": "Clinic Name",
+            "type": "string"
+          },
+          "disabled_at": {
+            "format": "date-time",
+            "title": "Disabled At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "const": "disabled",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "clinic_name",
+          "status",
+          "disabled_at"
+        ],
+        "title": "dso_clinic_disabled_out",
+        "type": "object"
+      },
+      "dso_clinic_list_out": {
+        "properties": {
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/dso_clinic_row_out"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/dso_clinic_summary_Out"
+          },
+          "visible_count": {
+            "title": "Visible Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "generated_at",
+          "visible_count",
+          "summary",
+          "items"
+        ],
+        "title": "dso_clinic_list_out",
+        "type": "object"
+      },
+      "dso_clinic_row_out": {
+        "properties": {
+          "actions": {
+            "$ref": "#/components/schemas/dso_clinic_actions_out"
+          },
+          "attention_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attention Reason"
+          },
+          "clinic_name": {
+            "title": "Clinic Name",
+            "type": "string"
+          },
+          "clinic_number": {
+            "title": "Clinic Number",
+            "type": "integer"
+          },
+          "clinic_timezone": {
+            "title": "Clinic Timezone",
+            "type": "string"
+          },
+          "disabled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabled At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_sync_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sync At"
+          },
+          "needs_attention": {
+            "title": "Needs Attention",
+            "type": "boolean"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "synced_today": {
+            "title": "Synced Today",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "clinic_name",
+          "clinic_number",
+          "clinic_timezone",
+          "synced_today",
+          "status",
+          "needs_attention",
+          "actions"
+        ],
+        "title": "dso_clinic_row_out",
+        "type": "object"
+      },
+      "dso_clinic_summary_Out": {
+        "properties": {
+          "active_clinics": {
+            "title": "Active Clinics",
+            "type": "integer"
+          },
+          "disabled_clinics": {
+            "title": "Disabled Clinics",
+            "type": "integer"
+          },
+          "needs_attention": {
+            "title": "Needs Attention",
+            "type": "integer"
+          },
+          "synced_today": {
+            "title": "Synced Today",
+            "type": "integer"
+          },
+          "total_clinics": {
+            "title": "Total Clinics",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_clinics",
+          "active_clinics",
+          "needs_attention",
+          "disabled_clinics",
+          "synced_today"
+        ],
+        "title": "dso_clinic_summary_Out",
+        "type": "object"
+      },
+      "dsoout": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "dsoout",
+        "type": "object"
+      },
+      "google_login_request": {
+        "properties": {
+          "credential": {
+            "title": "Credential",
+            "type": "string"
+          }
+        },
+        "required": [
+          "credential"
+        ],
+        "title": "google_login_request",
+        "type": "object"
+      },
+      "google_register_request": {
+        "properties": {
+          "credential": {
+            "title": "Credential",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "credential"
+        ],
+        "title": "google_register_request",
+        "type": "object"
+      },
+      "invite_out": {
+        "properties": {
+          "expires_at": {
+            "title": "Expires At",
+            "type": "string"
+          },
+          "invite_token": {
+            "title": "Invite Token",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message",
+          "invite_token",
+          "expires_at"
+        ],
+        "title": "invite_out",
+        "type": "object"
+      },
+      "loginrequest": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "password": {
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "loginrequest",
+        "type": "object"
+      },
+      "loginresponse": {
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "csrf_token": {
+            "title": "Csrf Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "csrf_token"
+        ],
+        "title": "loginresponse",
+        "type": "object"
+      },
+      "my_workspaces_out": {
+        "properties": {
+          "default_workspace": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/workspace_ref"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          },
+          "workspace_count": {
+            "title": "Workspace Count",
+            "type": "integer"
+          },
+          "workspaces": {
+            "items": {
+              "$ref": "#/components/schemas/workspace_item"
+            },
+            "title": "Workspaces",
+            "type": "array"
+          }
+        },
+        "required": [
+          "user_id",
+          "workspace_count",
+          "workspaces",
+          "username"
+        ],
+        "title": "my_workspaces_out",
+        "type": "object"
+      },
+      "operatorymap": {
+        "properties": {
+          "calendar_id": {
+            "title": "Calendar Id",
+            "type": "string"
+          },
+          "operatories": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Operatories",
+            "type": "array"
+          }
+        },
+        "required": [
+          "calendar_id",
+          "operatories"
+        ],
+        "title": "operatorymap",
+        "type": "object"
+      },
+      "refreshresponse": {
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "csrf_token": {
+            "title": "Csrf Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "csrf_token"
+        ],
+        "title": "refreshresponse",
+        "type": "object"
+      },
+      "registerdso": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "registerdso",
+        "type": "object"
+      },
+      "sync_log_clinic_option_out": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "sync_log_clinic_option_out",
+        "type": "object"
+      },
+      "sync_log_detail_out": {
+        "properties": {
+          "appointment_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Appointment Id"
+          },
+          "appointment_status": {
+            "title": "Appointment Status",
+            "type": "string"
+          },
+          "apt_num": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apt Num"
+          },
+          "attempt_count": {
+            "title": "Attempt Count",
+            "type": "integer"
+          },
+          "clinic_id": {
+            "format": "uuid",
+            "title": "Clinic Id",
+            "type": "string"
+          },
+          "clinic_name": {
+            "title": "Clinic Name",
+            "type": "string"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "direction": {
+            "enum": [
+              "crm_to_od",
+              "od_to_crm"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "direction_label": {
+            "title": "Direction Label",
+            "type": "string"
+          },
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "inbound_event_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inbound Event Id"
+          },
+          "operation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation"
+          },
+          "pat_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pat Id"
+          },
+          "patient_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Patient Name"
+          },
+          "payload": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payload"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "record_label": {
+            "title": "Record Label",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "processing",
+              "retrying",
+              "processed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "status_label": {
+            "title": "Status Label",
+            "type": "string"
+          },
+          "what_happened": {
+            "title": "What Happened",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "started_at",
+          "clinic_id",
+          "clinic_name",
+          "record_label",
+          "what_happened",
+          "direction",
+          "direction_label",
+          "status",
+          "status_label",
+          "attempt_count",
+          "appointment_id",
+          "inbound_event_id",
+          "appointment_status"
+        ],
+        "title": "sync_log_detail_out",
+        "type": "object"
+      },
+      "sync_log_page_out": {
+        "properties": {
+          "clinics": {
+            "items": {
+              "$ref": "#/components/schemas/sync_log_clinic_option_out"
+            },
+            "title": "Clinics",
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/sync_log_row_out"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/sync_log_summary_out"
+          },
+          "visible_count": {
+            "title": "Visible Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "generated_at",
+          "visible_count",
+          "summary",
+          "clinics",
+          "items"
+        ],
+        "title": "sync_log_page_out",
+        "type": "object"
+      },
+      "sync_log_row_out": {
+        "properties": {
+          "apt_num": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apt Num"
+          },
+          "attempt_count": {
+            "title": "Attempt Count",
+            "type": "integer"
+          },
+          "clinic_id": {
+            "format": "uuid",
+            "title": "Clinic Id",
+            "type": "string"
+          },
+          "clinic_name": {
+            "title": "Clinic Name",
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "crm_to_od",
+              "od_to_crm"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "direction_label": {
+            "title": "Direction Label",
+            "type": "string"
+          },
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "operation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation"
+          },
+          "patient_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Patient Name"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "record_label": {
+            "title": "Record Label",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "processing",
+              "retrying",
+              "processed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "status_label": {
+            "title": "Status Label",
+            "type": "string"
+          },
+          "what_happened": {
+            "title": "What Happened",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "started_at",
+          "clinic_id",
+          "clinic_name",
+          "record_label",
+          "what_happened",
+          "direction",
+          "direction_label",
+          "status",
+          "status_label",
+          "attempt_count"
+        ],
+        "title": "sync_log_row_out",
+        "type": "object"
+      },
+      "sync_log_summary_out": {
+        "properties": {
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "in_progress": {
+            "title": "In Progress",
+            "type": "integer"
+          },
+          "needs_attention": {
+            "title": "Needs Attention",
+            "type": "integer"
+          },
+          "synced_today": {
+            "title": "Synced Today",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "synced_today",
+          "in_progress",
+          "needs_attention",
+          "failed"
+        ],
+        "title": "sync_log_summary_out",
+        "type": "object"
+      },
+      "team_member_list_out": {
+        "properties": {
+          "active_count": {
+            "title": "Active Count",
+            "type": "integer"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/team_member_row_out"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "generated_at",
+          "active_count",
+          "items"
+        ],
+        "title": "team_member_list_out",
+        "type": "object"
+      },
+      "team_member_row_out": {
+        "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "joined_at": {
+            "format": "date-time",
+            "title": "Joined At",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "manager",
+              "staff"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "dso",
+              "clinic"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "email",
+          "role",
+          "scope",
+          "joined_at"
+        ],
+        "title": "team_member_row_out",
+        "type": "object"
+      },
+      "toroforge_billing_subscription_out": {
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "amount_display": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Display"
+          },
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "next_billing_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Billing At"
+          },
+          "payment_provider": {
+            "title": "Payment Provider",
+            "type": "string"
+          },
+          "plan_code": {
+            "title": "Plan Code",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "subscription_id": {
+            "format": "uuid",
+            "title": "Subscription Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subscription_id",
+          "plan_code",
+          "status",
+          "amount_minor",
+          "currency",
+          "payment_provider"
+        ],
+        "title": "toroforge_billing_subscription_out",
+        "type": "object"
+      },
+      "toroforge_clinic_billing_out": {
+        "properties": {
+          "active_subscription": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/toroforge_billing_subscription_out"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "available_balance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available Balance"
+          },
+          "available_balance_display": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available Balance Display"
+          },
+          "available_balance_minor": {
+            "default": 0,
+            "title": "Available Balance Minor",
+            "type": "integer"
+          },
+          "billing_health_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Billing Health Reason"
+          },
+          "billing_health_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "good",
+                  "attention"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Billing Health Status"
+          },
+          "clinic_id": {
+            "format": "uuid",
+            "title": "Clinic Id",
+            "type": "string"
+          },
+          "clinic_wallet": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/toroforge_wallet_read_item_out"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dso_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dso Id"
+          },
+          "failed_payment_count": {
+            "default": 0,
+            "title": "Failed Payment Count",
+            "type": "integer"
+          },
+          "generated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated At"
+          },
+          "has_wallet": {
+            "title": "Has Wallet",
+            "type": "boolean"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "next_action": {
+            "anyOf": [
+              {
+                "const": "create_wallet",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action"
+          },
+          "parent_wallet_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Wallet Label"
+          },
+          "premium_charges_this_month": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Premium Charges This Month"
+          },
+          "premium_charges_this_month_display": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Premium Charges This Month Display"
+          },
+          "premium_charges_this_month_minor": {
+            "default": 0,
+            "title": "Premium Charges This Month Minor",
+            "type": "integer"
+          },
+          "recent_ledger": {
+            "items": {
+              "$ref": "#/components/schemas/toroforge_wallet_ledger_row_out"
+            },
+            "title": "Recent Ledger",
+            "type": "array"
+          },
+          "wallet_inflow_this_month": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wallet Inflow This Month"
+          },
+          "wallet_inflow_this_month_display": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wallet Inflow This Month Display"
+          },
+          "wallet_inflow_this_month_minor": {
+            "default": 0,
+            "title": "Wallet Inflow This Month Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "has_wallet",
+          "clinic_id"
+        ],
+        "title": "toroforge_clinic_billing_out",
+        "type": "object"
+      },
+      "toroforge_dso_billing_out": {
+        "properties": {
+          "active_subscription": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/toroforge_billing_subscription_out"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "available_balance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available Balance"
+          },
+          "available_balance_display": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available Balance Display"
+          },
+          "available_balance_minor": {
+            "default": 0,
+            "title": "Available Balance Minor",
+            "type": "integer"
+          },
+          "billing_health_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Billing Health Reason"
+          },
+          "billing_health_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "good",
+                  "attention"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Billing Health Status"
+          },
+          "clinic_wallet_count": {
+            "default": 0,
+            "title": "Clinic Wallet Count",
+            "type": "integer"
+          },
+          "clinic_wallets": {
+            "items": {
+              "$ref": "#/components/schemas/toroforge_wallet_read_item_out"
+            },
+            "title": "Clinic Wallets",
+            "type": "array"
+          },
+          "dso_id": {
+            "format": "uuid",
+            "title": "Dso Id",
+            "type": "string"
+          },
+          "failed_payment_count": {
+            "default": 0,
+            "title": "Failed Payment Count",
+            "type": "integer"
+          },
+          "generated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated At"
+          },
+          "has_wallet": {
+            "title": "Has Wallet",
+            "type": "boolean"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "next_action": {
+            "anyOf": [
+              {
+                "const": "create_wallet",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action"
+          },
+          "premium_charges_this_month": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Premium Charges This Month"
+          },
+          "premium_charges_this_month_display": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Premium Charges This Month Display"
+          },
+          "premium_charges_this_month_minor": {
+            "default": 0,
+            "title": "Premium Charges This Month Minor",
+            "type": "integer"
+          },
+          "recent_ledger": {
+            "items": {
+              "$ref": "#/components/schemas/toroforge_wallet_ledger_row_out"
+            },
+            "title": "Recent Ledger",
+            "type": "array"
+          },
+          "treasury_wallet": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/toroforge_wallet_read_item_out"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "wallet_inflow_this_month": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wallet Inflow This Month"
+          },
+          "wallet_inflow_this_month_display": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wallet Inflow This Month Display"
+          },
+          "wallet_inflow_this_month_minor": {
+            "default": 0,
+            "title": "Wallet Inflow This Month Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "has_wallet",
+          "dso_id"
+        ],
+        "title": "toroforge_dso_billing_out",
+        "type": "object"
+      },
+      "toroforge_wallet_create_request": {
+        "properties": {
+          "username": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username"
+        ],
+        "title": "toroforge_wallet_create_request",
+        "type": "object"
+      },
+      "toroforge_wallet_create_response": {
+        "properties": {
+          "clinic_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clinic Id"
+          },
+          "dso_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dso Id"
+          },
+          "external_wallet_address": {
+            "title": "External Wallet Address",
+            "type": "string"
+          },
+          "external_wallet_username": {
+            "title": "External Wallet Username",
+            "type": "string"
+          },
+          "generated_password": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated Password"
+          },
+          "scope_type": {
+            "enum": [
+              "clinic",
+              "dso"
+            ],
+            "title": "Scope Type",
+            "type": "string"
+          },
+          "wallet_id": {
+            "format": "uuid",
+            "title": "Wallet Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "wallet_id",
+          "scope_type",
+          "external_wallet_address",
+          "external_wallet_username"
+        ],
+        "title": "toroforge_wallet_create_response",
+        "type": "object"
+      },
+      "toroforge_wallet_deposit_verify_request": {
+        "properties": {
+          "txid": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Txid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "txid"
+        ],
+        "title": "toroforge_wallet_deposit_verify_request",
+        "type": "object"
+      },
+      "toroforge_wallet_deposit_verify_response": {
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "ledger_entry_id": {
+            "format": "uuid",
+            "title": "Ledger Entry Id",
+            "type": "string"
+          },
+          "new_cached_balance_minor": {
+            "title": "New Cached Balance Minor",
+            "type": "integer"
+          },
+          "payment_transaction_id": {
+            "format": "uuid",
+            "title": "Payment Transaction Id",
+            "type": "string"
+          },
+          "provider_response": {
+            "additionalProperties": true,
+            "title": "Provider Response",
+            "type": "object"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "txid": {
+            "title": "Txid",
+            "type": "string"
+          },
+          "wallet_id": {
+            "format": "uuid",
+            "title": "Wallet Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "payment_transaction_id",
+          "ledger_entry_id",
+          "wallet_id",
+          "status",
+          "currency",
+          "txid",
+          "new_cached_balance_minor",
+          "provider_response"
+        ],
+        "title": "toroforge_wallet_deposit_verify_response",
+        "type": "object"
+      },
+      "toroforge_wallet_funding_initialize_request": {
+        "properties": {
+          "amount": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Amount",
+            "type": "string"
+          },
+          "cancel_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Cancel Url",
+            "type": "string"
+          },
+          "currency": {
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Currency",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "payer_address": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payer Address"
+          },
+          "payer_city": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payer City"
+          },
+          "payer_country": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payer Country"
+          },
+          "payer_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payer Name"
+          },
+          "payer_phone": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payer Phone"
+          },
+          "payer_state": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payer State"
+          },
+          "payer_zipcode": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payer Zipcode"
+          },
+          "payment_type": {
+            "enum": [
+              "card",
+              "bank"
+            ],
+            "title": "Payment Type",
+            "type": "string"
+          },
+          "success_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Success Url",
+            "type": "string"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
+          }
+        },
+        "required": [
+          "amount",
+          "currency",
+          "payment_type",
+          "success_url",
+          "cancel_url"
+        ],
+        "title": "toroforge_wallet_funding_initialize_request",
+        "type": "object"
+      },
+      "toroforge_wallet_funding_initialize_response": {
+        "properties": {
+          "amount_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Minor"
+          },
+          "external_payment_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Payment Id"
+          },
+          "ledger_entry_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ledger Entry Id"
+          },
+          "payment_transaction_id": {
+            "format": "uuid",
+            "title": "Payment Transaction Id",
+            "type": "string"
+          },
+          "provider_response": {
+            "additionalProperties": true,
+            "title": "Provider Response",
+            "type": "object"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "payment_transaction_id",
+          "status",
+          "provider_response"
+        ],
+        "title": "toroforge_wallet_funding_initialize_response",
+        "type": "object"
+      },
+      "toroforge_wallet_kyc_status_response": {
+        "properties": {
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "verified": {
+            "title": "Verified",
+            "type": "boolean"
+          },
+          "wallet_id": {
+            "format": "uuid",
+            "title": "Wallet Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "wallet_id",
+          "verified"
+        ],
+        "title": "toroforge_wallet_kyc_status_response",
+        "type": "object"
+      },
+      "toroforge_wallet_ledger_row_out": {
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "amount_display": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Display"
+          },
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "balance_after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Balance After"
+          },
+          "balance_after_display": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Balance After Display"
+          },
+          "balance_after_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Balance After Minor"
+          },
+          "counterparty_clinic_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counterparty Clinic Id"
+          },
+          "counterparty_clinic_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counterparty Clinic Name"
+          },
+          "counterparty_wallet_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counterparty Wallet Id"
+          },
+          "counterparty_wallet_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counterparty Wallet Label"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "debit",
+              "credit"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "event_label": {
+            "title": "Event Label",
+            "type": "string"
+          },
+          "event_subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Subtitle"
+          },
+          "event_type": {
+            "title": "Event Type",
+            "type": "string"
+          },
+          "ledger_entry_id": {
+            "format": "uuid",
+            "title": "Ledger Entry Id",
+            "type": "string"
+          },
+          "posted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Posted At"
+          },
+          "reference_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Id"
+          },
+          "reference_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Type"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "wallet_id": {
+            "format": "uuid",
+            "title": "Wallet Id",
+            "type": "string"
+          },
+          "wallet_label": {
+            "title": "Wallet Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ledger_entry_id",
+          "wallet_id",
+          "wallet_label",
+          "event_type",
+          "event_label",
+          "direction",
+          "status",
+          "amount_minor",
+          "currency",
+          "created_at"
+        ],
+        "title": "toroforge_wallet_ledger_row_out",
+        "type": "object"
+      },
+      "toroforge_wallet_read_item_out": {
+        "properties": {
+          "auto_debit_enabled": {
+            "title": "Auto Debit Enabled",
+            "type": "boolean"
+          },
+          "available_balance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available Balance"
+          },
+          "available_balance_display": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available Balance Display"
+          },
+          "available_balance_minor": {
+            "title": "Available Balance Minor",
+            "type": "integer"
+          },
+          "clinic_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clinic Id"
+          },
+          "clinic_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clinic Name"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "dso_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dso Id"
+          },
+          "external_wallet_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Wallet Address"
+          },
+          "external_wallet_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Wallet Username"
+          },
+          "last_balance_sync_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Balance Sync At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "wallet_id": {
+            "format": "uuid",
+            "title": "Wallet Id",
+            "type": "string"
+          },
+          "wallet_label": {
+            "title": "Wallet Label",
+            "type": "string"
+          },
+          "wallet_type": {
+            "enum": [
+              "dso_treasury",
+              "clinic"
+            ],
+            "title": "Wallet Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "wallet_id",
+          "wallet_type",
+          "wallet_label",
+          "status",
+          "currency",
+          "available_balance_minor",
+          "auto_debit_enabled"
+        ],
+        "title": "toroforge_wallet_read_item_out",
+        "type": "object"
+      },
+      "toroforge_wallet_transfer_request": {
+        "properties": {
+          "amount": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Amount",
+            "type": "string"
+          },
+          "currency": {
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Currency",
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount",
+          "currency"
+        ],
+        "title": "toroforge_wallet_transfer_request",
+        "type": "object"
+      },
+      "toroforge_wallet_transfer_response": {
+        "properties": {
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "external_transaction_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Transaction Id"
+          },
+          "from_wallet_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Wallet Id"
+          },
+          "provider_response": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Response"
+          },
+          "receiver_ledger_entry_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receiver Ledger Entry Id"
+          },
+          "receiver_new_cached_balance_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receiver New Cached Balance Minor"
+          },
+          "reused": {
+            "default": false,
+            "title": "Reused",
+            "type": "boolean"
+          },
+          "sender_ledger_entry_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sender Ledger Entry Id"
+          },
+          "sender_new_cached_balance_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sender New Cached Balance Minor"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "to_wallet_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Wallet Id"
+          },
+          "wallet_transfer_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Wallet Transfer Id"
+          }
+        },
+        "required": [
+          "wallet_transfer_id",
+          "status",
+          "amount_minor",
+          "currency"
+        ],
+        "title": "toroforge_wallet_transfer_response",
+        "type": "object"
+      },
+      "usercreate": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "password": {
+            "title": "Password",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "email",
+          "password"
+        ],
+        "title": "usercreate",
+        "type": "object"
+      },
+      "userout": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "username"
+        ],
+        "title": "userout",
+        "type": "object"
+      },
+      "webhook_config_out": {
+        "properties": {
+          "header_name": {
+            "title": "Header Name",
+            "type": "string"
+          },
+          "header_value": {
+            "title": "Header Value",
+            "type": "string"
+          },
+          "webhook_url": {
+            "title": "Webhook Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "webhook_url",
+          "header_name",
+          "header_value"
+        ],
+        "title": "webhook_config_out",
+        "type": "object"
+      },
+      "webhook_response": {
+        "properties": {
+          "clinic": {
+            "format": "uuid",
+            "title": "Clinic",
+            "type": "string"
+          },
+          "crm_type": {
+            "title": "Crm Type",
+            "type": "string"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "job_id",
+          "message",
+          "clinic",
+          "crm_type"
+        ],
+        "title": "webhook_response",
+        "type": "object"
+      },
+      "workspace_item": {
+        "properties": {
+          "access_source": {
+            "enum": [
+              "owner",
+              "dso_assignment",
+              "clinic_assignment"
+            ],
+            "title": "Access Source",
+            "type": "string"
+          },
+          "clinic_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clinic Id"
+          },
+          "clinic_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clinic Name"
+          },
+          "dso_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dso Id"
+          },
+          "dso_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dso Name"
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "manager",
+              "staff"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "scope_type": {
+            "enum": [
+              "dso",
+              "clinic"
+            ],
+            "title": "Scope Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope_type",
+          "role",
+          "access_source"
+        ],
+        "title": "workspace_item",
+        "type": "object"
+      },
+      "workspace_ref": {
+        "properties": {
+          "clinic_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clinic Id"
+          },
+          "dso_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dso Id"
+          },
+          "scope_type": {
+            "enum": [
+              "dso",
+              "clinic"
+            ],
+            "title": "Scope Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope_type"
+        ],
+        "title": "workspace_ref",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "OAuth2PasswordBearer": {
+        "flows": {
+          "password": {
+            "scopes": {},
+            "tokenUrl": "/login"
+          }
+        },
+        "type": "oauth2"
+      }
+    }
+  },
+  "info": {
+    "title": "FastAPI",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/": {
+      "get": {
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Root"
+      }
+    },
+    "/DSO/": {
+      "post": {
+        "operationId": "registerDso_DSO__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/registerdso"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dsoout"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Registerdso",
+        "tags": [
+          "Registration"
+        ]
+      }
+    },
+    "/clinics/": {
+      "post": {
+        "operationId": "standalone_clinic_clinics__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/cliniccreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/clinicout"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Standalone Clinic",
+        "tags": [
+          "Registsration"
+        ]
+      }
+    },
+    "/clinics/dso/{dso_id}": {
+      "post": {
+        "operationId": "dso_clinic_clinics_dso__dso_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dso_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dso Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/cliniccreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/clinicout"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Dso Clinic",
+        "tags": [
+          "Registsration"
+        ]
+      }
+    },
+    "/clinics/{clinic_id}/billing/wallet_center": {
+      "get": {
+        "operationId": "get_clinic_wallet_command_center_clinics__clinic_id__billing_wallet_center_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "clinic_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Clinic Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/toroforge_clinic_billing_out"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Clinic Wallet Command Center",
+        "tags": [
+          "Toroforge Billing"
+        ]
+      }
+    },
+    "/clinics/{clinic_id}/sync-logs": {
+      "get": {
+        "operationId": "get_clinic_sync_logs_page_clinics__clinic_id__sync_logs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "clinic_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Clinic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/SyncStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/sync_log_page_out"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Clinic Sync Logs Page",
+        "tags": [
+          "Sync Logs"
+        ]
+      }
+    },
+    "/clinics/{clinic_id}/sync-logs/stream": {
+      "get": {
+        "operationId": "stream_clinic_sync_logs_events_clinics__clinic_id__sync_logs_stream_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "clinic_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Clinic Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stream Clinic Sync Logs Events",
+        "tags": [
+          "Sync Logs"
+        ]
+      }
+    },
+    "/clinics/{clinic_id}/sync-logs/{sync_log_id}": {
+      "get": {
+        "operationId": "get_clinic_sync_log_detail_clinics__clinic_id__sync_logs__sync_log_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "clinic_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Clinic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sync_log_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Sync Log Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/sync_log_detail_out"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Clinic Sync Log Detail",
+        "tags": [
+          "Sync Logs"
+        ]
+      }
+    },
+    "/clinics/{clinic_id}/team": {
+      "get": {
+        "operationId": "get_clinic_team_members_clinics__clinic_id__team_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "clinic_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Clinic Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/team_member_list_out"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Clinic Team Members",
+        "tags": [
+          "Team"
+        ]
+      }
+    },
+    "/dsos/{dso_id}/billing/wallet_center": {
+      "get": {
+        "operationId": "get_dso_wallet_command_center_dsos__dso_id__billing_wallet_center_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dso_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dso Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/toroforge_dso_billing_out"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Dso Wallet Command Center",
+        "tags": [
+          "Toroforge Billing"
+        ]
+      }
+    },
+    "/dsos/{dso_id}/clinics": {
+      "get": {
+        "operationId": "get_dso_clinics_dsos__dso_id__clinics_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dso_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dso Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "active",
+                    "disabled"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dso_clinic_list_out"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Dso Clinics",
+        "tags": [
+          "DSO Clinics"
+        ]
+      }
+    },
+    "/dsos/{dso_id}/clinics/{clinic_id}/disable": {
+      "patch": {
+        "operationId": "disable_clinic_from_dso_dsos__dso_id__clinics__clinic_id__disable_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dso_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dso Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "clinic_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Clinic Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dso_clinic_disabled_out"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Disable Clinic From Dso",
+        "tags": [
+          "DSO Clinics"
+        ]
+      }
+    },
+    "/dsos/{dso_id}/sync-logs": {
+      "get": {
+        "operationId": "get_dso_syn_logs_page_dsos__dso_id__sync_logs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dso_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dso Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "clinic_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Clinic Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/SyncStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/sync_log_page_out"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Dso Syn Logs Page",
+        "tags": [
+          "Sync Logs"
+        ]
+      }
+    },
+    "/dsos/{dso_id}/sync-logs/stream": {
+      "get": {
+        "operationId": "stream_dso_sync_logs_page_dsos__dso_id__sync_logs_stream_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dso_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dso Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stream Dso Sync Logs Page",
+        "tags": [
+          "Sync Logs"
+        ]
+      }
+    },
+    "/dsos/{dso_id}/sync-logs/{sync_log_id}": {
+      "get": {
+        "operationId": "get_dso_sync_log_detail_dsos__dso_id__sync_logs__sync_log_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dso_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dso Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sync_log_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Sync Log Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/sync_log_detail_out"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Dso Sync Log Detail",
+        "tags": [
+          "Sync Logs"
+        ]
+      }
+    },
+    "/dsos/{dso_id}/team": {
+      "get": {
+        "operationId": "get_dso_team_members_dsos__dso_id__team_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dso_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dso Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/team_member_list_out"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Dso Team Members",
+        "tags": [
+          "Team"
+        ]
+      }
+    },
+    "/invites/accept": {
+      "post": {
+        "operationId": "accept_invite_invites_accept_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/accept_invite_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Accept Invite",
+        "tags": [
+          "Invites"
+        ]
+      }
+    },
+    "/invites/clinic/{clinic_id}": {
+      "post": {
+        "operationId": "create_clinic_invite_invites_clinic__clinic_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "clinic_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Clinic Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/create_clinic_invite_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Clinic Invite",
+        "tags": [
+          "Invites"
+        ]
+      }
+    },
+    "/invites/dso/{dso_id}": {
+      "post": {
+        "operationId": "create_dso_invite_invites_dso__dso_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dso_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dso Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/create_dso_invite_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/invite_out"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Dso Invite",
+        "tags": [
+          "Invites"
+        ]
+      }
+    },
+    "/login": {
+      "post": {
+        "operationId": "login_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/loginrequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/loginresponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Login",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/login/google": {
+      "post": {
+        "operationId": "login_with_google_login_google_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/google_login_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/loginresponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Login With Google",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/login/refresh": {
+      "post": {
+        "operationId": "refresh_access_token_login_refresh_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "refresh_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Refresh Token"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "csrf_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Csrf Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/refreshresponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Refresh Access Token",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/logout": {
+      "post": {
+        "operationId": "logout_logout_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Logout",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/me/workspaces": {
+      "get": {
+        "operationId": "get_my_workspaces_me_workspaces_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/my_workspaces_out"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get My Workspaces",
+        "tags": [
+          "Workspaces"
+        ]
+      }
+    },
+    "/register": {
+      "post": {
+        "operationId": "registration_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/usercreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/userout"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Registration",
+        "tags": [
+          "Registration"
+        ]
+      }
+    },
+    "/register/google": {
+      "post": {
+        "operationId": "register_with_google_register_google_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/google_register_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/loginresponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Register With Google",
+        "tags": [
+          "Registration"
+        ]
+      }
+    },
+    "/toroforge/clinics/{clinic_id}/wallet": {
+      "post": {
+        "operationId": "create_standalone_clinic_wallet_toroforge_clinics__clinic_id__wallet_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "clinic_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Clinic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-key",
+            "required": true,
+            "schema": {
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/toroforge_wallet_create_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/toroforge_wallet_create_response"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Standalone Clinic Wallet",
+        "tags": [
+          "ToroForge Wallets"
+        ]
+      }
+    },
+    "/toroforge/dsos/{dso_id}/clinics/{clinic_id}/wallet": {
+      "post": {
+        "operationId": "create_dso_clinic_wallet_toroforge_dsos__dso_id__clinics__clinic_id__wallet_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dso_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dso Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "clinic_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Clinic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-key",
+            "required": true,
+            "schema": {
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/toroforge_wallet_create_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/toroforge_wallet_create_response"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Dso Clinic Wallet",
+        "tags": [
+          "ToroForge Wallets"
+        ]
+      }
+    },
+    "/toroforge/dsos/{dso_id}/clinics/{clinic_id}/wallet-transfer": {
+      "post": {
+        "operationId": "transfer_from_dso_to_clinic_toroforge_dsos__dso_id__clinics__clinic_id__wallet_transfer_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dso_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dso Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "clinic_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Clinic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/toroforge_wallet_transfer_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/toroforge_wallet_transfer_response"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Transfer From Dso To Clinic",
+        "tags": [
+          "ToroForge Wallet Transfers"
+        ]
+      }
+    },
+    "/toroforge/dsos/{dso_id}/wallet": {
+      "post": {
+        "operationId": "create_dso_treasury_wallet_toroforge_dsos__dso_id__wallet_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dso_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dso Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-key",
+            "required": true,
+            "schema": {
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/toroforge_wallet_create_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/toroforge_wallet_create_response"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Dso Treasury Wallet",
+        "tags": [
+          "ToroForge Wallets"
+        ]
+      }
+    },
+    "/toroforge/wallets/{wallet_id}/funding": {
+      "post": {
+        "operationId": "initialize_wallet_funding_toroforge_wallets__wallet_id__funding_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "wallet_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Wallet Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/toroforge_wallet_funding_initialize_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/toroforge_wallet_funding_initialize_response"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Initialize Wallet Funding",
+        "tags": [
+          "ToroForge Funding"
+        ]
+      }
+    },
+    "/toroforge/wallets/{wallet_id}/funding/{payment_transaction_id}/verify-deposit": {
+      "post": {
+        "operationId": "verify_wallet_deposit_toroforge_wallets__wallet_id__funding__payment_transaction_id__verify_deposit_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "wallet_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Wallet Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "payment_transaction_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Payment Transaction Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/toroforge_wallet_deposit_verify_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/toroforge_wallet_deposit_verify_response"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Verify Wallet Deposit",
+        "tags": [
+          "ToroForge Funding"
+        ]
+      }
+    },
+    "/toroforge/wallets/{wallet_id}/kyc": {
+      "post": {
+        "operationId": "start_wallet_kyc_toroforge_wallets__wallet_id__kyc_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "wallet_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Wallet Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Start Wallet Kyc",
+        "tags": [
+          "ToroForge KYC"
+        ]
+      }
+    },
+    "/toroforge/wallets/{wallet_id}/kyc-status": {
+      "get": {
+        "operationId": "get_wallet_kyc_status_toroforge_wallets__wallet_id__kyc_status_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "wallet_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Wallet Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "refresh",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Refresh",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/toroforge_wallet_kyc_status_response"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Wallet Kyc Status",
+        "tags": [
+          "ToroForge KYC"
+        ]
+      }
+    },
+    "/toroforge/wallets/{wallet_id}/password/rotate": {
+      "post": {
+        "operationId": "update_password_for_wallet_toroforge_wallets__wallet_id__password_rotate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "wallet_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Wallet Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "csrf_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Csrf Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Update Password For Wallet",
+        "tags": [
+          "ToroForge Wallets"
+        ]
+      }
+    },
+    "/webhook/{clinic_id}/webhook-config": {
+      "get": {
+        "operationId": "get_clinic_webhook_config_webhook__clinic_id__webhook_config_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "clinic_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Clinic Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhook_config_out"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Clinic Webhook Config",
+        "tags": [
+          "WEBHOOK_CONFIG"
+        ]
+      }
+    },
+    "/webhook/{crm_type}/{clinic_id}": {
+      "post": {
+        "operationId": "webhooks_webhook__crm_type___clinic_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "crm_type",
+            "required": true,
+            "schema": {
+              "title": "Crm Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "clinic_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Clinic Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Webhook_requests"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhook_response"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Webhooks",
+        "tags": [
+          "CRM Webhooks"
+        ]
+      }
+    }
+  }
+}
