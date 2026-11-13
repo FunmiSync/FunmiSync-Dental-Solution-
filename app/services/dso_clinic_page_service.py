@@ -12,6 +12,8 @@ from app.models.entities import AppointmentSyncLog, RegisteredClinics, SyncStatu
 from app.schemas.api import dso_clinic_actions_out, dso_clinic_disabled_out, dso_clinic_summary_Out, dso_clinic_list_out, dso_clinic_row_out
 from app.infrastructure.cache.dso_clinic_page_cache import DSO_CLINIC_LIST_TTL_SECONDS, cache_get_json, cache_set_json, dso_clinic_list_cache_Key, invalidate_dso_clinic_list_cache
 from app.security.rbac import get_dso_role
+from app.services.clinic_health import as_utc, unreachable_too_long
+from app.services.sync_alerts import open_clinic_alerts
 import logging
 
 logger = logging.getLogger(__name__)
@@ -83,18 +85,28 @@ def has_recent_webhook_auth_problem(clinic: RegisteredClinics, now: datetime) ->
     return (now - clinic.last_webhook_auth_failed_at) <= WEBHOOK_FAILURE_WINDOW
 
 
-def clinic_attention_reason(clinic: RegisteredClinics, now: datetime) -> str | None:
+def clinic_attention_reason(clinic: RegisteredClinics, now: datetime,
+                            open_alerts: tuple[int, str] | None = None) -> str | None:
+    """open_alerts: (number of open clinic sync alerts, the oldest one's message)."""
     if has_invalid_clinic_config(clinic):
         return "Clinic settings are incomplete"
 
     if clinic.od_health_status == "auth_failed":
         return clinic.od_health_reason or "OpenDental credentials failed"
 
+    if unreachable_too_long(clinic, now):
+        # The clinic's CRM changes are kept and sent once OpenDental answers again.
+        return f"OpenDental has not answered since {as_utc(clinic.od_health_changed_at):%d %b %H:%M} UTC"
+
     if clinic.crm_health_status == "auth_failed":
         return clinic.crm_health_reason or "CRM credentials failed"
 
     if has_recent_webhook_auth_problem(clinic, now):
         return "Webhook header validation failed"
+
+    if open_alerts:
+        count, oldest = open_alerts
+        return oldest if count == 1 else f"{count} problems are holding CRM changes back. Oldest: {oldest}"
 
     return None
 
@@ -226,6 +238,7 @@ async def build_dso_clinic_list(
         if row.clinic_id is not None:
             stats_by_clinic[UUID(str(row.clinic_id))] = row
 
+    alerts_by_clinic = await open_clinic_alerts(db, clinic_ids)
     all_items: list[dso_clinic_row_out] = []
     now = datetime.now(timezone.utc)
 
@@ -239,7 +252,7 @@ async def build_dso_clinic_list(
         
         synced_today = int(stats.synced_today or 0) if stats else 0
         last_sync_at = stats.last_sync_at if stats else None 
-        attention_reason = clinic_attention_reason(clinic, now)
+        attention_reason = clinic_attention_reason(clinic, now, alerts_by_clinic.get(clinic.id))
         needs_attention = attention_reason is not None
 
         all_items.append(

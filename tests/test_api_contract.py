@@ -18,6 +18,11 @@ class ApiContractTests(unittest.TestCase):
         self.assertEqual(limit["default"], "Query(default=None)")
         limit["default"] = "Query(default=50, ge=1, le=200)"
         expected["routes"].append({"method":"GET","path":"/health/ready","options":{},"parameters":[]})
+        # Reviewed 2026-11-13: new routes only (in-app notifications); existing routes unchanged.
+        additions = json.loads((ROOT / "docs/api_reviewed_additions.json").read_text())
+        expected["routes"] += additions["contract_routes"]
+        expected["schemas"].update(additions["contract_schemas"])
+        expected["schemas"].update(additions["contract_schema_changes"])  # internal, optional Note
         expected["routes"].sort(key=lambda item:(item["path"],item["method"]))
         self.assertEqual(expected, capture_contract(),
                          "API surface changed. Review frontend compatibility; do not blindly replace the baseline.")

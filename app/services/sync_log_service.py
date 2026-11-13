@@ -98,6 +98,8 @@ def what_happened(log: AppointmentSyncLog) -> str:
         return "Appointment Updated"
     if operation == "unchanged":
         return "Appointment Unchanged"
+    if operation == "superseded":
+        return "Skipped: A Newer Change Was Already Sent"
 
     return "Appointment Sync"
 

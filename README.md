@@ -147,7 +147,7 @@ through the same `resolve`, with `automatic check` as the resolver in the audit 
 .venv/bin/python -m tools.stuck_operations auto             # run as a Render Cron Job every 15 minutes
 ```
 
-| Action | Counts as done when | Counts as not done when (after 1 hour) |
+| Action | Counts as done when | Counts as not done when (after 1 hour; 10 minutes for OpenDental) |
 | --- | --- | --- |
 | DSO→clinic transfer | Toronet shows exactly one unused transfer of that exact amount from the treasury to the clinic since it started | Toronet shows no transfer from the treasury to the clinic since it started |
 | Top-up start | ToroForge has exactly one unlinked payment of that amount for the wallet | ToroForge has none |
@@ -159,8 +159,70 @@ through the same `resolve`, with `automatic check` as the resolver in the audit 
 
 Anything else is left for a person: several matches, a near match (for example a different
 amount), a provider error, comm logs and popups, and OpenDental actions started before request
-details were kept. Under an hour, "nothing found yet" waits for the next run. Requests are kept
+details were kept. Before that time, "nothing found yet" waits for the next run. Requests are kept
 encrypted in `external_operations.request_encrypted` until the result is applied.
+
+The CRM worker does not wait for `auto` on OpenDental bookings and patients: when an event
+reaches one whose earlier attempt timed out, it applies the same rule first (found: reuse it;
+missing for 10 minutes: create it; otherwise wait or leave it for a person).
+
+### CRM events: one line per clinic
+
+The webhook saves each CRM event in `inbound_events` as `queued`, then queues a job that only
+says "this clinic has something waiting". The worker that runs it takes the clinic's PostgreSQL
+lock and sends the clinic's waiting events to OpenDental **oldest first**, 20 per turn, then lets
+other clinics have the worker (`app/infrastructure/workers/appointments.py`). Postgres holds
+the line and Redis is only the doorbell, so a lost or repeated job cannot lose or double an event.
+
+Events are never dropped for their age. Retries are counted, and stop after five.
+
+| What happened | What the line does | Who is told |
+| --- | --- | --- |
+| OpenDental does not answer (timeout, connection, 5xx) | Pauses the clinic's line and tries again after 2, then 5, then 15 minutes, for as long as it takes. Not counted as a retry | After an hour: the clinic |
+| A timed-out booking or patient may still show in OpenDental | Checked again after 2 minutes; settles within 10. Not counted | Nobody (it settles itself) |
+| A clinic problem: rejected API keys, chair mapping, patient match, no free slot, a request OpenDental refuses | `needs_attention`; retried after 1 min, 5 min, 30 min, 2 h and 6 h | The clinic, at the first failure |
+| A problem in our app, or an outcome a person must settle | `retrying` (or `waiting` for a person); same five retries | Our team (logs; a person-to-settle case at once) |
+| The fifth retry fails too | `dead`: kept in the **dead queue**, never resent on its own | Our team (`dead_queue` alert) |
+
+Fix the cause, then resend: `python -m tools.sync_line replay --clinic <id> --by "<name>"` (or
+`--event <id>`); each resent event gets a fresh set of retries, recorded in the audit log.
+
+**The clinic is told** once per problem: the clinic's managers are emailed (if it has none, its
+admins; else its owner), every team member gets an in-app notification, the DSO clinic list
+shows what needs fixing, and the event's sync log says "Needs the clinic: ... (N retries left)".
+**Our team** sees errors in the logs and open alerts in `tools.sync_line status`. Events with the
+same problem share one alert (`sync_alerts`), which closes when an event with that cause goes
+through and none is still waiting on it.
+
+A later change to the same appointment waits only behind short waits (an outage, a booking
+being checked, an outcome a person must settle). Otherwise it goes through, and the older
+event, still retrying or dead, closes as `superseded` (never billed); so does an older event
+that runs after a newer one was applied. A superseded event still sends a comm log or pop-up
+the appointment never had. A disabled clinic's webhooks are refused (403, nothing saved);
+events already in its line wait, untouched, until it is enabled again, and `wake` skips it.
+
+**Notes.** The appointment note comes from the webhook's `Note` field (or the older `Notes`).
+OpenDental's note is replaced whenever the CRM's note changes; a note-only change sends only
+the note, and an empty note leaves OpenDental's note alone. Comm logs and pop-ups go once per
+appointment.
+
+**Email** is sent through any provider's SMTP server; set `SMTP_HOST` (and the variables in
+Environment Variables). Without it no email is sent, and the in-app alerts still work.
+Notifications: `GET /notifications`, `POST /notifications/{id}/read`, `POST /notifications/read-all`.
+
+```bash
+rq worker appointments --with-scheduler --url "$REDIS_URL"   # the scheduler starts retries and resumes paused lines
+.venv/bin/python -m tools.sync_line status                   # waiting and dead events, open alerts (read-only)
+.venv/bin/python -m tools.sync_line replay --clinic <id> --by "<name>"   # resend the dead queue once fixed
+.venv/bin/python -m tools.sync_line wake                     # re-queue every waiting line; safe as a Render Cron Job
+```
+
+Deploying needs revision `f4a100000002` first: every clinic query reads its new
+`sync_paused_until` column, while older code ignores the new columns. Run the migration, then
+deploy. `/health/ready` checks that the tables and columns this code reads exist
+(`REQUIRED_SCHEMA` in `app/infrastructure/database.py`) rather than one exact revision, so an
+additive migration never makes the running app "not ready"; list new columns there when code
+starts reading them.
 
 `tests/test_mvc_architecture.py` fails if an `async def` never awaits or a session call
 (`commit`, `execute`, ...) is not awaited.
@@ -172,7 +234,7 @@ streams share `controllers/sync_logs/streaming.py`.
 For example, edit `app/controllers/auth/login.py` for login behavior. The old
 `auth/login.py` path aliases that same module for existing imports. Old queued
 `workers.workers.process_crm_load_job` references still resolve; new code uses
-`app.infrastructure.workers.appointments.process_crm_load_job`. Keep compatibility
+`app.infrastructure.workers.appointments.work_through_clinic_job` (an old job just wakes its clinic's line). Keep compatibility
 modules until callers and queued jobs have been audited. The full mapping is in
 `docs/mvc_module_map.json`.
 
@@ -299,6 +361,7 @@ Core groups:
 - Database: `DATABASE_USERNAME`, `DATABASE_PASSWORD`, `DATABASE_HOSTNAME`, `DATABASE_PORTNAME`, `DATABASE_NAME`
 - Auth/security: `SECRET_KEY`, `ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS`, `INVITE_TTL_HOURS`, `ENCRYPTION_KEY`, `HASH_KEY`
 - Infrastructure: `REDIS_URL`, `BACKEND_BASE_URL`
+- Alert email (optional): `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `ALERT_EMAIL_FROM`, `FRONTEND_BASE_URL`
 - Google auth: `GOOGLE_CLIENT_ID`
 - ToroForge/Toronet: `TOROFORGE_NETWORK`, `TOROFORGE_BASE_URL`, `TOROFORGE_CONNECTW_URL`, `TOROFORGE_DEPLOYER_URL`, `TOROFORGE_ADMIN`, `TOROFORGE_ADMINPWD`
 
@@ -327,6 +390,11 @@ Required values:
 | `TOROFORGE_DEPLOYER_URL` | Yes | ToroForge deployer URL |
 | `TOROFORGE_ADMIN` | Yes | ToroForge admin credential |
 | `TOROFORGE_ADMINPWD` | Yes | ToroForge admin password |
+| `SMTP_HOST` | No | SMTP server for clinic alert emails (any provider). Unset: no email is sent |
+| `SMTP_PORT` | No | `587` (STARTTLS, the default) or `465` (TLS) |
+| `SMTP_USERNAME`, `SMTP_PASSWORD` | No | SMTP login, if the server needs one |
+| `ALERT_EMAIL_FROM` | No | Sender address for alert emails; required for email to be sent |
+| `FRONTEND_BASE_URL` | No | App link in alert emails; defaults to `https://www.fumisync.com` |
 
 ## ToroForge / Toronet Usage
 

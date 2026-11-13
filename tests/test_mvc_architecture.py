@@ -88,7 +88,7 @@ with patch("sqlalchemy.engine.Engine.connect", side_effect=AssertionError("No da
     from sqlalchemy.orm import configure_mappers
     configure_mappers()
     from main import app
-    assert len(app.openapi()["paths"]) == 38
+    assert len(app.openapi()["paths"]) == 41  # 38 + 3 reviewed notification routes
 '''
         pairs = [("core.models", "app.models.entities"), ("auth.login", "app.controllers.auth.login"),
                  ("workers.workers", "app.infrastructure.workers.appointments")]
@@ -158,8 +158,8 @@ class ArchitectureBoundaryTests(unittest.TestCase):
 
     def test_original_offline_contract_inspection_follows_aliases(self):
         captured = capture_contract()
-        self.assertEqual(len(captured["routes"]), 38)
-        self.assertEqual(len(captured["schemas"]), 61)
+        self.assertEqual(len(captured["routes"]), 41)  # 38 + 3 reviewed notification routes
+        self.assertEqual(len(captured["schemas"]), 64)  # 61 + 3 reviewed notification shapes
         self.assertEqual(len(captured["cookies"]), 3)
 
 
@@ -276,7 +276,7 @@ class ModelMetadataTests(unittest.TestCase):
         self.assertIs(Base, LegacyBase)
         self.assertIs(Base, DatabaseBase)
         self.assertIs(Users.__table__, Base.metadata.tables["users"])
-        self.assertEqual(len(Base.registry.mappers), 19)
+        self.assertEqual(len(Base.registry.mappers), 21)  # + SyncAlert, UserNotification
 
     def test_postgres_ddl_changes_are_limited_to_reviewed_phase_4_tables(self):
         from app.models.entities import Base
@@ -291,7 +291,9 @@ class ModelMetadataTests(unittest.TestCase):
             }
         expected = json.loads((ROOT / "docs/database_metadata_baseline.json").read_text())
         changes = json.loads((ROOT / "docs/phase_4_metadata_changes.json").read_text())
-        self.assertEqual(set(changes), {"wallets", "role_assignments", "audit_logs", "external_operations"})
+        self.assertEqual(set(changes), {"wallets", "role_assignments", "audit_logs", "external_operations",
+                                        "appointments", "inbound_events", "registered_clinics",
+                                        "sync_alerts", "user_notifications"})
         expected.update(changes)
         self.assertEqual(expected, actual)
 

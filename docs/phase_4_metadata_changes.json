@@ -39,5 +39,41 @@
       "CREATE UNIQUE INDEX ix_external_operations_id ON external_operations (id)",
       "CREATE UNIQUE INDEX uq_external_operation_active_resource ON external_operations (resource_id, action) WHERE state IN ('in_flight', 'uncertain', 'succeeded')"
     ]
+  },
+  "registered_clinics": {
+    "ddl": "\nCREATE TABLE registered_clinics (\n\tcrm_type VARCHAR NOT NULL, \n\tclinic_name VARCHAR NOT NULL, \n\tclinic_number INTEGER NOT NULL, \n\tclinic_timezone VARCHAR NOT NULL, \n\tod_developer_key VARCHAR NOT NULL, \n\tod_customer_key VARCHAR NOT NULL, \n\tcrm_api_key VARCHAR NOT NULL, \n\twebhook_secret VARCHAR, \n\tlocation_id VARCHAR NOT NULL, \n\tcalendar_id VARCHAR NOT NULL, \n\toperatory_calendar_map JSON, \n\towner_id UUID NOT NULL, \n\tdso_id UUID, \n\tlast_webhook_auth_failed_at TIMESTAMP WITH TIME ZONE, \n\twebhook_auth_failure_count INTEGER DEFAULT '0' NOT NULL, \n\tod_health_status VARCHAR, \n\tod_health_reason VARCHAR, \n\tod_health_changed_at TIMESTAMP WITH TIME ZONE, \n\tsync_paused_until TIMESTAMP WITH TIME ZONE, \n\tcrm_health_status VARCHAR, \n\tcrm_health_reason VARCHAR, \n\tcrm_health_changed_at TIMESTAMP WITH TIME ZONE, \n\tis_disabled BOOLEAN DEFAULT 'false' NOT NULL, \n\tdisabled_at TIMESTAMP WITH TIME ZONE, \n\tdisabled_by UUID, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tid UUID DEFAULT gen_random_uuid() NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(owner_id) REFERENCES users (id) ON DELETE RESTRICT, \n\tFOREIGN KEY(dso_id) REFERENCES \"Dsos\" (id) ON DELETE CASCADE, \n\tFOREIGN KEY(disabled_by) REFERENCES users (id) ON DELETE SET NULL\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_registered_clinics_dso_id ON registered_clinics (dso_id)",
+      "CREATE INDEX ix_registered_clinics_is_disabled ON registered_clinics (is_disabled)",
+      "CREATE UNIQUE INDEX ix_registered_clinics_id ON registered_clinics (id)"
+    ]
+  },
+  "inbound_events": {
+    "ddl": "\nCREATE TABLE inbound_events (\n\tclinic_id UUID NOT NULL, \n\tcrm_type VARCHAR NOT NULL, \n\tevent_id VARCHAR, \n\tcontact_id VARCHAR, \n\tjob_id VARCHAR, \n\tprocessing_status VARCHAR DEFAULT 'received' NOT NULL, \n\tattempt_count INTEGER DEFAULT '0' NOT NULL, \n\tfailure_reason VARCHAR, \n\tpayload TEXT NOT NULL, \n\treceived_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tprocessed_at TIMESTAMP WITH TIME ZONE, \n\tsync_log_id UUID, \n\tnext_attempt_at TIMESTAMP WITH TIME ZONE, \n\talert_id UUID, \n\tid UUID DEFAULT gen_random_uuid() NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(clinic_id) REFERENCES registered_clinics (id) ON DELETE CASCADE, \n\tFOREIGN KEY(alert_id) REFERENCES sync_alerts (id) ON DELETE SET NULL\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_inbound_events_clinic_received_at ON inbound_events (clinic_id, received_at)",
+      "CREATE INDEX ix_inbound_events_waiting ON inbound_events (clinic_id, received_at) WHERE processing_status IN ('queued', 'waiting', 'retrying', 'needs_attention', 'processing')",
+      "CREATE UNIQUE INDEX ix_inbound_events_id ON inbound_events (id)"
+    ]
+  },
+  "appointments": {
+    "ddl": "\nCREATE TABLE appointments (\n\t\"AptNum\" INTEGER, \n\tevent_id VARCHAR NOT NULL, \n\tstatus VARCHAR NOT NULL, \n\tprevious_status VARCHAR, \n\tstatus_changed_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tstart_time VARCHAR NOT NULL, \n\tend_time VARCHAR NOT NULL, \n\tdate VARCHAR NOT NULL, \n\tcalendar_id VARCHAR NOT NULL, \n\tcommslog_done BOOLEAN DEFAULT 'false' NOT NULL, \n\tpopups_done BOOLEAN DEFAULT 'false' NOT NULL, \n\tlast_event_received_at TIMESTAMP WITH TIME ZONE, \n\tnote_hash VARCHAR, \n\tclinic_id UUID NOT NULL, \n\tpat_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tid UUID DEFAULT gen_random_uuid() NOT NULL, \n\tPRIMARY KEY (id), \n\tCONSTRAINT \"uq_clinic_AptNum\" UNIQUE (clinic_id, \"AptNum\"), \n\tCONSTRAINT uq_clinic_eventid UNIQUE (clinic_id, event_id), \n\tFOREIGN KEY(clinic_id) REFERENCES registered_clinics (id) ON DELETE CASCADE, \n\tFOREIGN KEY(pat_id) REFERENCES patients (id) ON DELETE CASCADE\n)\n\n",
+    "indexes": [
+      "CREATE UNIQUE INDEX ix_appointments_id ON appointments (id)"
+    ]
+  },
+  "sync_alerts": {
+    "ddl": "\nCREATE TABLE sync_alerts (\n\tclinic_id UUID NOT NULL, \n\taudience VARCHAR NOT NULL, \n\tcode VARCHAR NOT NULL, \n\tsubject_key VARCHAR DEFAULT '' NOT NULL, \n\tmessage VARCHAR NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tlast_seen_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tresolved_at TIMESTAMP WITH TIME ZONE, \n\temailed_at TIMESTAMP WITH TIME ZONE, \n\temail_error VARCHAR, \n\tid UUID DEFAULT gen_random_uuid() NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(clinic_id) REFERENCES registered_clinics (id) ON DELETE CASCADE\n)\n\n",
+    "indexes": [
+      "CREATE UNIQUE INDEX ix_sync_alerts_id ON sync_alerts (id)",
+      "CREATE UNIQUE INDEX uq_sync_alerts_open ON sync_alerts (clinic_id, code, subject_key) WHERE resolved_at IS NULL"
+    ]
+  },
+  "user_notifications": {
+    "ddl": "\nCREATE TABLE user_notifications (\n\tuser_id UUID NOT NULL, \n\talert_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tread_at TIMESTAMP WITH TIME ZONE, \n\tid UUID DEFAULT gen_random_uuid() NOT NULL, \n\tPRIMARY KEY (id), \n\tCONSTRAINT uq_user_notification_alert UNIQUE (user_id, alert_id), \n\tFOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE, \n\tFOREIGN KEY(alert_id) REFERENCES sync_alerts (id) ON DELETE CASCADE\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_user_notifications_user_created ON user_notifications (user_id, created_at)",
+      "CREATE UNIQUE INDEX ix_user_notifications_id ON user_notifications (id)"
+    ]
   }
 }

@@ -203,24 +203,7 @@ class OpenDentalTests(unittest.IsolatedAsyncioTestCase):
 
 
 class DisabledWorkerTests(unittest.IsolatedAsyncioTestCase):
-    async def test_disabled_job_is_not_sent_or_retried_or_billed(self):
-        from workers import workers
-        db = fake_async_session()
-        log = SimpleNamespace(id=uuid4())
-        row = clinic(is_disabled=True)
-        db.scalar.side_effect = [log, row]
-        logs = MagicMock(mark_processing=AsyncMock(), mark_failure=AsyncMock())
-        session = session_context(db)
-        with patch("workers.workers.worker_session", return_value=session), \
-             patch("workers.workers.get_current_job", return_value=None), \
-             patch("workers.workers.AppointmentSyncLogService", return_value=logs), \
-             patch("workers.workers.openDentalApi") as provider:
-            result = await workers.process_crm_load(row.id, "ghl", {}, log.id)
-        self.assertEqual(result["status"], "skipped")
-        self.assertFalse(logs.mark_failure.call_args.kwargs["billable"])
-        self.assertFalse(logs.mark_failure.call_args.kwargs["should_retry"])
-        provider.assert_not_called()
-        session.__aexit__.assert_awaited_once()
+    # A disabled clinic's events through the worker: test_clinic_line.FailureTests.
 
     async def test_explicit_nonbillable_failure_is_persisted(self):
         from infra.appointment_sync_log_helper import AppointmentSyncLogService
@@ -383,6 +366,10 @@ class ApiBehaviorTests(unittest.TestCase):
         expected["paths"]["/health/ready"] = {"get":{"tags":["Health"],"summary":"Readiness",
             "operationId":"readiness_health_ready_get","responses":{"200":{"description":"Successful Response",
             "content":{"application/json":{"schema":{}}}}}}}
+        # Reviewed 2026-11-13: new routes only (in-app notifications); existing routes unchanged.
+        additions = json.loads((ROOT / "docs/api_reviewed_additions.json").read_text())
+        expected["paths"].update(additions["openapi_paths"])
+        expected["components"]["schemas"].update(additions["openapi_schemas"])
         self.assertEqual(expected, self.app.openapi())
 
     def test_disabled_webhook_does_not_enqueue(self):

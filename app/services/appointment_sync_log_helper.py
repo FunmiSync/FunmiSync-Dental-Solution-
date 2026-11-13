@@ -108,6 +108,33 @@ class AppointmentSyncLogService:
     
     
     
+    async def mark_waiting(self, sync_log: AppointmentSyncLog, *, reason: str, failure_source: SyncFailureSource) -> AppointmentSyncLog:
+        """Still on its way: shown as in progress, never billed, nothing counted as failed."""
+        sync_log.sync_status = SyncStatus.QUEUED
+        sync_log.reason = reason
+        sync_log.failure_source = failure_source
+        sync_log.counts_toward_usage = False
+        sync_log.is_billable = False
+        sync_log.completed_at = None
+        await self.db.commit()
+        await self.db.refresh(sync_log)
+        await self.publish_change(sync_log)
+        return sync_log
+
+    async def mark_superseded(self, sync_log: AppointmentSyncLog, *, reason: str) -> AppointmentSyncLog:
+        """Done without calling OpenDental: a newer change to the appointment already went through."""
+        sync_log.sync_status = SyncStatus.PROCESSED
+        sync_log.operation = "superseded"
+        sync_log.reason = reason
+        sync_log.failure_source = SyncFailureSource.NONE
+        sync_log.counts_toward_usage = False
+        sync_log.is_billable = False
+        sync_log.completed_at = datetime.now(timezone.utc)
+        await self.db.commit()
+        await self.db.refresh(sync_log)
+        await self.publish_change(sync_log)
+        return sync_log
+
     async def mark_operation(self, sync_log: AppointmentSyncLog, *, operation: str) -> AppointmentSyncLog:
         sync_log.operation = operation
         await self.db.commit()

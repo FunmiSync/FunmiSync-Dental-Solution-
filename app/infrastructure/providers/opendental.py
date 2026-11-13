@@ -118,6 +118,11 @@ class openDentalApi:
         body = appointment_payload_update(appointment_data)
         return await self._request("PUT", endpoint, json =body )
     
+    async def update_appointment_note(self, Aptnum: int | str, note: str):
+        """Replace the appointment's note and change nothing else (OpenDental: "Note will
+        overwrite any existing note"; fields not sent are left as they are)."""
+        return await self._request("PUT", f"/appointments/{Aptnum}", json={"Note": note})
+
     async def  create_commslog(self, comms_logs:create_commslogs):
         endpoint = f"/commlogs"
         body = create_commlog(comms_logs)

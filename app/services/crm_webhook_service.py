@@ -12,7 +12,7 @@ from starlette.concurrency import run_in_threadpool
 from app.config import settings
 from app.infrastructure.cache.dso_clinic_page_cache import invalidate_dso_clinic_list_cache
 from app.infrastructure.queue import appointments_queue, async_redis
-from app.infrastructure.workers.appointments import process_crm_load_job
+from app.infrastructure.workers.appointments import JOB_RETRY, JOB_TIMEOUT, work_through_clinic_job
 from app.models.entities import InboundEvent, RegisteredClinics, SyncDirection
 from app.security.encryption import decode_secret, encrypt_json_secret, encrypt_secret, hash_lookup
 from app.security.webhook_secret import WEBHOOK_SECRET_HEADER
@@ -23,7 +23,6 @@ from app.services.errors import Conflict, NotFound, OperationFailed, PermissionD
 logger = logging.getLogger(__name__)
 
 DUPLICATE_WINDOW_SECONDS = 300
-JOB_RETRY = {"max": 3, "interval": [60, 120, 300]}
 
 
 async def get_webhook_clinic(db: AsyncSession, *, clinic_id: UUID, crm_type: str) -> RegisteredClinics:
@@ -156,9 +155,13 @@ async def _enqueue_sync_job(db: AsyncSession, clinic: RegisteredClinics, event: 
     job_id = str(uuid4())
     log_ctx = {**log_ctx, "job_id": job_id}
 
-    # Store the job id before enqueueing so a worker can always be traced to its event.
+    # The event joins its clinic's line here, in Postgres. The job below only wakes a
+    # worker for this clinic; the worker reads the event from the line, so a lost or
+    # repeated job cannot lose or double an event. The job id is kept for tracing.
     try:
         event.job_id = job_id
+        event.sync_log_id = sync_log_id
+        event.processing_status = "queued"
         event.failure_reason = None
         await db.commit()
     except SQLAlchemyError as exc:
@@ -170,29 +173,16 @@ async def _enqueue_sync_job(db: AsyncSession, clinic: RegisteredClinics, event: 
     try:
         # RQ's Redis client is synchronous; enqueue in a worker thread.
         job = await run_in_threadpool(
-            appointments_queue.enqueue,
-            process_crm_load_job,
-            clinic.id,
-            crm_type,
-            {"encrypted_payload": encrypt_json_secret(payload)},
-            sync_log_id,
-            job_id=job_id,
-            retry=Retry(**JOB_RETRY),
+            appointments_queue.enqueue, work_through_clinic_job, clinic.id,
+            job_id=job_id, retry=Retry(**JOB_RETRY), job_timeout=JOB_TIMEOUT,
         )
     except Exception as exc:
+        # Leave the line, so the CRM's own retry of this webhook is the one processed.
         await async_redis.delete(redis_key)
         await _mark_event_failed(db, event, status="enqueue_failed", reason=str(exc),
                            log_message="Failed to persist enqueue failure state", log_ctx=log_ctx)
         logger.exception("Failed to enqueue webhook job", extra=log_ctx)
         raise OperationFailed("Unable to queue webhook job") from exc
-
-    try:
-        event.processing_status = "queued"
-        await db.commit()
-    except SQLAlchemyError:
-        # The job is already queued; a stale status must not fail the webhook.
-        await db.rollback()
-        logger.exception("Webhook job queued but queued status could not be persisted", extra=log_ctx)
     return job
 
 

@@ -89,15 +89,31 @@ async def reload_expired(db: AsyncSession, *entities) -> None:
             await db.refresh(entity, attribute_names=names)
 
 
+# What this code needs beyond f4a100000001 tables: the newest columns and tables it reads
+# (migration f4a100000002). Add the next migration's additions here when code starts using them.
+REQUIRED_SCHEMA = (
+    "SELECT operation_key, request_encrypted FROM external_operations LIMIT 0",
+    "SELECT sync_paused_until FROM registered_clinics LIMIT 0",
+    "SELECT last_event_received_at, note_hash FROM appointments LIMIT 0",
+    "SELECT sync_log_id, next_attempt_at, alert_id FROM inbound_events LIMIT 0",
+    "SELECT id FROM sync_alerts LIMIT 0",
+    "SELECT id FROM user_notifications LIMIT 0",
+)
+
+
 async def ping_db(*, check_schema=False) -> tuple[bool, str]:
     try:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
             if check_schema:
-                await conn.execute(text("SELECT operation_key FROM external_operations LIMIT 0"))
-                revision = (await conn.execute(text("SELECT version_num FROM alembic_version"))).scalar_one()
-                if revision != "f4a100000001":
-                    return False, "Database schema upgrade required"
+                # Check that the database has what this code reads, not that it is on one exact
+                # revision: a newer, additive migration then never makes running code "not
+                # ready", so migrations can always run before the deploy that needs them.
+                for probe in REQUIRED_SCHEMA:
+                    try:
+                        await conn.execute(text(probe))
+                    except SQLAlchemyError:
+                        return False, "Database schema upgrade required"
         return True, "DB connection OK"
 
     except (SQLAlchemyError, OSError) as e:

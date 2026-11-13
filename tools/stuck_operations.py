@@ -11,8 +11,9 @@ then record the answer here. Every resolution is written to the audit log.
     .venv/bin/python -m tools.stuck_operations resolve <id> --not-done --by "Funmi" --note "no transaction in ToroForge"
 
 `auto` only reads from ToroForge and OpenDental. It resolves an action when exactly one
-provider record matches it, or when nothing shows after an hour; everything else is
-left for `resolve`.
+provider record matches it, or when nothing shows after an hour (10 minutes for OpenDental);
+everything else is left for `resolve`. The CRM worker settles timed-out OpenDental bookings
+and patients itself with the same rules, as soon as OpenDental answers again.
 
 Values needed with --happened (read them off the provider):
     wallet_transfer: TX_ID        appointment_create: AptNum     patient_create: PatNum

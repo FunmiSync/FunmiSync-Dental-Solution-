@@ -238,6 +238,9 @@ class RegisteredClinics(Base, Autoid):
     od_health_status: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     od_health_reason: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     od_health_changed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # While OpenDental is not answering, this clinic's line of CRM events waits until
+    # this time and then tries again. Cleared by the first OpenDental call that works.
+    sync_paused_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     crm_health_status: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     crm_health_reason: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     crm_health_changed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -286,6 +289,12 @@ class Appointments(Base, Autoid):
     calendar_id: Mapped[str] = mapped_column(String, nullable=False)
     commslog_done: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     popups_done: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    # When the newest CRM event applied to this appointment arrived. An older event that
+    # runs later (after a retry, say) is skipped instead of undoing the newer change.
+    last_event_received_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Keyed hash of the CRM note last written to OpenDental (never the text itself), so a
+    # changed note is sent, and an unchanged one is not sent again.
+    note_hash: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     clinic_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("registered_clinics.id", ondelete="CASCADE"), nullable=False)
     pat_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
@@ -306,12 +315,28 @@ class InboundEvent(Base, Autoid):
     event_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     contact_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     job_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # Each clinic's waiting events form a line, worked through oldest first
+    # (app/infrastructure/workers/appointments.py). Waiting: queued, waiting, retrying,
+    # needs_attention (retried hourly until fixed) and processing (only left behind by a
+    # worker that died). Done: processed, superseded. Before the line: received, and
+    # enqueue_failed (the CRM retries that webhook). No event is dropped for its age.
     processing_status: Mapped[str] = mapped_column(String, nullable=False, default="received", server_default="received",)
+    # Failed attempts that count toward the retry limit. Waiting for OpenDental to come
+    # back, or for a timed-out booking to be checked, does not count.
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0",)
     failure_reason: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     payload: Mapped[str] = mapped_column(Text, nullable=False)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(),)
     processed_at: Mapped[Optional[datetime]] = mapped_column( DateTime(timezone=True), nullable=True,)
+    # The sync log this event updates (identical payloads share one). No foreign key:
+    # sync logs already point back here, and two tables pointing at each other complicate
+    # creating and deleting rows.
+    sync_log_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    # A retrying or waiting event is not picked up again before this time.
+    next_attempt_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The open problem keeping this event from OpenDental, while it needs attention.
+    alert_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("sync_alerts.id", ondelete="SET NULL"), nullable=True)
 
     __table_args__ = (
     Index(
@@ -319,7 +344,55 @@ class InboundEvent(Base, Autoid):
         "clinic_id",
         "received_at",
     ),
+    # Only waiting events, so finding a clinic's next one stays fast as history grows.
+    Index("ix_inbound_events_waiting", "clinic_id", "received_at",
+          postgresql_where=text("processing_status IN ('queued', 'waiting', 'retrying', 'needs_attention', 'processing')")),
 )
+
+
+class SyncAlert(Base, Autoid):
+    """One problem keeping a clinic's CRM events from OpenDental; open until it is gone.
+
+    audience "clinic": the clinic manager is emailed and every team member notified in the
+    app. audience "internal": a problem in our app, for our team (logs and tools.sync_line).
+    Events with the same code and subject share one open alert, so a problem is announced
+    once, not once per event or per retry.
+    """
+    __tablename__ = "sync_alerts"
+
+    clinic_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("registered_clinics.id", ondelete="CASCADE"), nullable=False)
+    audience: Mapped[str] = mapped_column(String, nullable=False)
+    code: Mapped[str] = mapped_column(String, nullable=False)
+    subject_key: Mapped[str] = mapped_column(String, nullable=False, default="", server_default="")
+    message: Mapped[str] = mapped_column(String, nullable=False)  # what to fix; never patient details
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    emailed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    email_error: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+
+    __table_args__ = (
+        Index("uq_sync_alerts_open", "clinic_id", "code", "subject_key", unique=True,
+              postgresql_where=text("resolved_at IS NULL")),
+    )
+
+
+class UserNotification(Base, Autoid):
+    """An in-app notification of a sync alert for one team member."""
+    __tablename__ = "user_notifications"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    alert_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("sync_alerts.id", ondelete="CASCADE"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    read_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "alert_id", name="uq_user_notification_alert"),
+        Index("ix_user_notifications_user_created", "user_id", "created_at"),
+    )
 
 
 

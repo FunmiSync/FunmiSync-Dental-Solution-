@@ -24,6 +24,7 @@ from app.controllers.billing import toroforge_wallet_transfer
 from app.controllers.billing import toroforge_wallet_creation
 from app.controllers.billing import toroforge_billing_wallet_read
 from app.controllers.billing import toroforge_funding
+from app.controllers import notifications
 from app.controllers.errors import service_error_handler
 from app.services.errors import ServiceError
 
@@ -72,6 +73,7 @@ app.include_router(toroforge_billing_wallet_read.router)
 app.include_router(toroforge_funding.router)
 app.include_router(toroforge_wallet_transfer.router)
 app.include_router(health.router)
+app.include_router(notifications.router)
 
 
 async def verify_db_on_start():

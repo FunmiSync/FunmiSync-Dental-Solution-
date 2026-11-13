@@ -273,8 +273,39 @@ class MigrationPreparationTests(unittest.TestCase):
         from alembic.config import Config
         from alembic.script import ScriptDirectory
         script=ScriptDirectory.from_config(Config("alembic.ini"))
-        self.assertEqual(script.get_heads(),["f4a100000001"])
+        self.assertEqual(script.get_heads(),["f4a100000002"])
+        self.assertEqual(script.get_revision("f4a100000002").down_revision,"f4a100000001")
         self.assertEqual(script.get_revision("f4a100000001").down_revision,"d64762c7874a")
+    def test_line_migration_adds_exactly_what_the_models_declare(self):
+        import importlib.util
+        from sqlalchemy.dialects import postgresql
+        from app.models.entities import Base
+        spec=importlib.util.spec_from_file_location("line_migration","alembic/versions/f4a100000002_clinic_event_line.py")
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        fake=MagicMock()
+        with patch.object(module,"op",fake):module.upgrade()
+        added={(call.args[0],call.args[1].name):call.args[1] for call in fake.add_column.call_args_list}
+        self.assertEqual(set(added),{("appointments","last_event_received_at"),("appointments","note_hash"),
+                                     ("inbound_events","sync_log_id"),("inbound_events","next_attempt_at"),
+                                     ("inbound_events","alert_id"),("registered_clinics","sync_paused_until")})
+        dialect=postgresql.dialect()
+        for (table,name),column in added.items():
+            model=Base.metadata.tables[table].c[name]
+            self.assertEqual((column.type.compile(dialect),column.nullable),(model.type.compile(dialect),model.nullable),name)
+        import sqlalchemy as sa
+        from sqlalchemy.schema import CreateTable
+        for call in fake.create_table.call_args_list:  # the two new tables, column for column
+            table=sa.Table(call.args[0],sa.MetaData(),*call.args[1:])
+            model=Base.metadata.tables[call.args[0]]
+            self.assertEqual({c.name:(c.type.compile(dialect),c.nullable) for c in table.columns},
+                             {c.name:(c.type.compile(dialect),c.nullable) for c in model.columns},call.args[0])
+        self.assertEqual(sorted(call.args[0] for call in fake.create_table.call_args_list),["sync_alerts","user_notifications"])
+        for index in fake.create_index.call_args_list:
+            model_index=next(i for i in Base.metadata.tables[index.args[1]].indexes if i.name==index.args[0])
+            self.assertEqual(index.args[2],[c.name for c in model_index.columns],index.args[0])
+            self.assertEqual(index.kwargs.get("unique",False),bool(model_index.unique),index.args[0])
+            where=model_index.dialect_options["postgresql"]["where"]
+            self.assertEqual(str(index.kwargs.get("postgresql_where")),str(where) if where is not None else "None",index.args[0])
     def test_migration_declares_journal_columns_and_partial_indexes(self):
         import sqlalchemy as sa
         from app.models.entities import ExternalOperation

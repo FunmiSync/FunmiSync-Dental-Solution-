@@ -13,6 +13,14 @@ class ReconciliationRequired(ToroForgeError):
     pass
 
 
+class OutcomeNotKnownYet(ReconciliationRequired):
+    """A timed-out call may still show up at the provider; look again shortly."""
+
+
+class OutcomeNeedsPerson(ReconciliationRequired):
+    """The provider's records do not settle what happened; a person must decide."""
+
+
 def stored_request(operation: ExternalOperation) -> dict | None:
     """The request sent to the provider; None once applied, or for calls made before it was kept."""
     return decode_json_secret(operation.request_encrypted) if operation.request_encrypted else None
@@ -28,6 +36,13 @@ class ExternalOperations:
 
     async def get(self, key):
         return await self.db.scalar(select(ExternalOperation).filter_by(operation_key=key).limit(1))
+
+    async def confirmed_result(self, key):
+        """The provider's result when the call is known to have happened, else None."""
+        operation = await self.get(key)
+        if operation and operation.state in {"succeeded", "applied"} and operation.result_encrypted:
+            return decode_json_secret(operation.result_encrypted)
+        return None
 
     async def active(self, resource_id, action):
         return await self.db.scalar(select(ExternalOperation).where(
@@ -92,6 +107,33 @@ class ExternalOperations:
         operation.state = "applied"
         operation.request_encrypted = None  # nothing left to look up; do not keep patient details
         record_audit(self.db,entity_type="external_operation",entity_id=operation.id,action="local_applied")
+
+    @staticmethod
+    def unknown(operation) -> bool:
+        """The call was sent but nobody knows yet whether the provider acted on it."""
+        return operation is not None and operation.state in {"in_flight", "uncertain"}
+
+    @staticmethod
+    def retire(operation, *, failure_code: str) -> None:
+        """Closed as not done. Frees the key so the next attempt calls the provider afresh;
+        the row stays as evidence. The caller commits."""
+        operation.state = "failed"
+        operation.failure_code = failure_code
+        operation.operation_key = f"{operation.operation_key}#retired-{uuid4().hex[:12]}"
+
+    async def settle_from_provider_read(self, operation, *, result: dict | None, evidence: str) -> None:
+        """Internal only: a read of the provider's own records settled an unknown call.
+        result: what the call produced, or None when it was not done. Commits."""
+        if result is None:
+            self.retire(operation, failure_code="checked_not_done")
+        else:
+            operation.result_encrypted = encrypt_json_secret(result)
+            operation.state = "succeeded"
+            operation.failure_code = None
+        record_audit(self.db, entity_type="external_operation", entity_id=operation.id,
+                     action="checked_happened" if result is not None else "checked_not_done",
+                     details={"operation": operation.action, "evidence": evidence})
+        await self.db.commit()
 
     async def confirm_from_verified_read(self, key, result):
         """Internal only: caller must establish identity using a provider read."""

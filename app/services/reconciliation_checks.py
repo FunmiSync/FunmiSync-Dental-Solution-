@@ -32,6 +32,10 @@ HAPPENED, NOT_DONE, WAITING, UNCLEAR = "happened", "not_done", "waiting", "uncle
 # Silence from a provider only means "not done" once this much time has passed:
 # Toronet and OpenDental show a completed action within minutes.
 NOT_DONE_AFTER = timedelta(hours=1)
+# OpenDental answers or gives up within seconds (our client stops waiting after 15), so a
+# booking or patient that is still missing after this long was not created. A shorter wait
+# matters here: the clinic's later changes to that appointment wait until it is settled.
+OPENDENTAL_NOT_DONE_AFTER = timedelta(minutes=10)
 # Toronet's clock and ours can differ slightly; accept records this much older than our row.
 CLOCK_SKEW = timedelta(minutes=2)
 # Newest transactions read from Toronet. If all of them are newer than the transfer,
@@ -75,10 +79,34 @@ def money(amount_minor: int, currency: str) -> str:
     return f"{money_amount_string(amount_minor=amount_minor, currency=currency)} {currency}"
 
 
-def not_done_or_wait(age: timedelta, evidence: str) -> Finding:
-    if age < NOT_DONE_AFTER:
-        return Finding(WAITING, f"{evidence} so far; it is closed as not done once it is an hour old")
+def not_done_or_wait(age: timedelta, evidence: str, *, after: timedelta = NOT_DONE_AFTER) -> Finding:
+    if age < after:
+        wait = "an hour" if after == timedelta(hours=1) else f"{int(after.total_seconds() // 60)} minutes"
+        return Finding(WAITING, f"{evidence} so far; it is closed as not done once it is {wait} old")
     return Finding(NOT_DONE, evidence)
+
+
+def appointment_to_look_for(request: dict | None) -> tuple[str, str] | None:
+    """(chair, day) to read from OpenDental for a create request; None if its details were not kept."""
+    if not request or not request.get("AptDateTime") or not request.get("Op") or not request.get("PatNum"):
+        return None
+    return str(request["Op"]), str(request["AptDateTime"])[:10]
+
+
+def created_appointment_finding(appointments: list[dict], request: dict, age: timedelta) -> Finding:
+    """Did a create that timed out land in OpenDental? Used by the automatic check and by
+    the booking itself. appointments: what OpenDental lists for that chair and day."""
+    when = str(request["AptDateTime"])[:19]
+    matches = [appointment for appointment in appointments or []
+               if str(appointment.get("PatNum")) == str(request["PatNum"])
+               and str(appointment.get("AptDateTime") or "")[:19] == when and appointment.get("AptNum")]
+    if len(matches) == 1:
+        return Finding(HAPPENED, f"OpenDental has the appointment at {when}: AptNum {matches[0]['AptNum']}",
+                       {"AptNum": str(matches[0]["AptNum"])})
+    if matches:
+        return Finding(UNCLEAR, f"OpenDental has {len(matches)} appointments for this patient at {when}")
+    return not_done_or_wait(age, f"OpenDental has no appointment for this patient at {when}",
+                            after=OPENDENTAL_NOT_DONE_AFTER)
 
 
 def history_reaches_back(records: list[dict], since: datetime) -> bool:
@@ -248,23 +276,16 @@ class ProviderChecks:
                            {"PatNum": str(candidates[0]["PatNum"])})
         if candidates or matches:
             return Finding(UNCLEAR, "OpenDental has similar patients; a person must pick one")
-        return not_done_or_wait(item.age, "OpenDental has no such patient")
+        return not_done_or_wait(item.age, "OpenDental has no such patient", after=OPENDENTAL_NOT_DONE_AFTER)
 
     async def appointment_create(self, item, operation: ExternalOperation) -> Finding:
         request = stored_request(operation)
-        if not request or not request.get("AptDateTime") or not request.get("Op") or not request.get("PatNum"):
+        lookup = appointment_to_look_for(request)
+        if lookup is None:
             return Finding(UNCLEAR, "Started before request details were kept; a person must check OpenDental")
         clinic = await self.db.get(RegisteredClinics, UUID(operation.operation_key.split(":")[1]))
         if clinic is None:
             return Finding(UNCLEAR, "The clinic is missing")
-        when, day = str(request["AptDateTime"])[:19], str(request["AptDateTime"])[:10]
-        appointments = await self.opendental_for(clinic).get_appointments_in_operatory(request["Op"], day, day) or []
-        matches = [appointment for appointment in appointments
-                   if str(appointment.get("PatNum")) == str(request["PatNum"])
-                   and str(appointment.get("AptDateTime") or "")[:19] == when and appointment.get("AptNum")]
-        if len(matches) == 1:
-            return Finding(HAPPENED, f"OpenDental has the appointment at {when}: AptNum {matches[0]['AptNum']}",
-                           {"AptNum": str(matches[0]["AptNum"])})
-        if matches:
-            return Finding(UNCLEAR, f"OpenDental has {len(matches)} appointments for this patient at {when}")
-        return not_done_or_wait(item.age, f"OpenDental has no appointment for this patient at {when}")
+        chair, day = lookup
+        appointments = await self.opendental_for(clinic).get_appointments_in_operatory(chair, day, day) or []
+        return created_appointment_finding(appointments, request, item.age)

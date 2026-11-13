@@ -2,11 +2,32 @@
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
-from sqlalchemy import MetaData, event
+from sqlalchemy import Boolean, MetaData, event, text
+from sqlalchemy.schema import DefaultClause
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.models.entities import Base
+
+
+def sqlite_metadata() -> MetaData:
+    """The app's tables, adjusted where SQLite would otherwise behave unlike PostgreSQL."""
+    metadata = MetaData()
+    for table in Base.metadata.sorted_tables:
+        copied = table.to_metadata(metadata)
+        # SQLite can exercise the predicate invariant, but its locks/isolation
+        # differ. Dedicated PostgreSQL concurrency tests are still required.
+        for index in copied.indexes:
+            where = index.dialect_options["postgresql"].get("where")
+            if where is not None:
+                index.dialect_options["sqlite"]["where"] = where
+        # PostgreSQL reads server_default "false" as the boolean false; SQLite would store
+        # the text 'false', which reads back as True. Use 0/1 so defaults mean the same.
+        for column in copied.columns:
+            default = column.server_default
+            if isinstance(column.type, Boolean) and default is not None and str(getattr(default, "arg", "")).lower() in ("true", "false"):
+                column.server_default = DefaultClause(text("1" if str(default.arg).lower() == "true" else "0"))
+    return metadata
 
 
 async def local_session():
@@ -18,15 +39,7 @@ async def local_session():
     def configure(connection, _):
         connection.create_function("gen_random_uuid", 0, lambda: uuid4().hex)
 
-    metadata = MetaData()
-    for table in Base.metadata.sorted_tables:
-        copied = table.to_metadata(metadata)
-        # SQLite can exercise the predicate invariant, but its locks/isolation
-        # differ. Dedicated PostgreSQL concurrency tests are still required.
-        for index in copied.indexes:
-            where = index.dialect_options["postgresql"].get("where")
-            if where is not None:
-                index.dialect_options["sqlite"]["where"] = where
+    metadata = sqlite_metadata()
     async with engine.begin() as connection:
         await connection.run_sync(metadata.create_all)
     session = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)()
@@ -70,12 +83,6 @@ def local_sync_session():
     def configure(connection, _):
         connection.create_function("gen_random_uuid", 0, lambda: uuid4().hex)
 
-    metadata = MetaData()
-    for table in Base.metadata.sorted_tables:
-        copied = table.to_metadata(metadata)
-        for index in copied.indexes:
-            where = index.dialect_options["postgresql"].get("where")
-            if where is not None:
-                index.dialect_options["sqlite"]["where"] = where
+    metadata = sqlite_metadata()
     metadata.create_all(engine)
     return sessionmaker(bind=engine, expire_on_commit=True)(), engine

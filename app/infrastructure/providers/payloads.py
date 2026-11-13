@@ -51,12 +51,16 @@ def appointment_payload (appointment :  Appointments_create):
 }
 
 def appointment_payload_update (appointment :  Appointments_update):
-    return{
+    body = {
       "AptDateTime": appointment.AptDateTime,
       "Pattern" : appointment.Pattern,
       "Op" : appointment.Op,
       "AptStatus" :appointment.AptStatus,
-}
+    }
+    # OpenDental leaves out fields that are not sent, and a sent Note replaces the old one.
+    if appointment.Note is not None:
+        body["Note"] = appointment.Note
+    return body
 
 def create_commlog(commlogs : create_commslogs):
     return{

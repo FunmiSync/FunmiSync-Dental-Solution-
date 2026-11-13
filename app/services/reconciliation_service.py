@@ -15,7 +15,7 @@ log with who checked and why.
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +31,7 @@ from app.services.billing.funding_service import ToroForgeFundingService
 from app.services.billing.wallet_transfer_service import ToroForgeWalletTransferService
 from app.services.billing_service import money_amount_string
 from app.services.errors import Conflict, InvalidRequest, NotFound, ServiceError
+from app.services.external_operations import ExternalOperations
 from app.services.reconciliation_checks import HAPPENED, UNCLEAR, WAITING, Finding
 
 logger = logging.getLogger(__name__)
@@ -226,10 +227,7 @@ async def _resolve_operation(db: AsyncSession, operation: ExternalOperation, *, 
         if action == "wallet_password_rotation":
             await _apply_new_password(db, operation)
     else:
-        operation.state = "failed"
-        operation.failure_code = "operator_confirmed_not_done"
-        # Free the key so the next attempt calls the provider afresh; this row stays as evidence.
-        operation.operation_key = f"{key}#retired-{uuid4().hex[:12]}"
+        ExternalOperations.retire(operation, failure_code="operator_confirmed_not_done")
         if transfer is not None:
             await _fail_transfer(db, transfer, reason=f"Confirmed not sent at ToroForge (checked by {resolved_by})")
 

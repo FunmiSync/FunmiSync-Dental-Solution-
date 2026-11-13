@@ -98,6 +98,7 @@ class Appointments_update(  BaseModel):
     AptDateTime : str 
     Op : str 
     AptStatus : str 
+    Note : Optional[str] = None  # replaces OpenDental's note when given
 
 class create_commslogs(BaseModel):
     commlogs : str 
@@ -657,3 +658,25 @@ class toroforge_wallet_transfer_response(BaseModel):
 
 
 
+
+
+class notification_out(BaseModel):
+    """A sync alert as one team member sees it. message says what to fix; resolved_at is
+    set once the problem is gone (the waiting CRM changes then went through)."""
+    id: UUID
+    clinic_id: UUID
+    clinic_name: str
+    problem: str
+    message: str
+    created_at: datetime
+    read_at: Optional[datetime] = None
+    resolved_at: Optional[datetime] = None
+
+
+class notification_page_out(BaseModel):
+    items: List[notification_out]
+    unread: int
+
+
+class notifications_read_out(BaseModel):
+    updated: int

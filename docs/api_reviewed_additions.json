@@ -1,0 +1,401 @@
+{
+  "_reviewed": "2026-11-13: in-app notifications for clinic sync alerts (new routes and shapes only; existing routes unchanged). Appointments_update gains an optional Note: internal, used only to build the OpenDental request, never received or returned by the API.",
+  "contract_routes": [
+    {
+      "method": "GET",
+      "options": {
+        "response_model": "notification_page_out"
+      },
+      "parameters": [
+        {
+          "default": "Query(default=False)",
+          "name": "unread_only",
+          "type": "bool"
+        },
+        {
+          "default": "Query(default=50, ge=1, le=200)",
+          "name": "limit",
+          "type": "int"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/notifications"
+    },
+    {
+      "method": "POST",
+      "options": {
+        "response_model": "notifications_read_out"
+      },
+      "parameters": [
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/notifications/read-all"
+    },
+    {
+      "method": "POST",
+      "options": {
+        "response_model": "notification_out"
+      },
+      "parameters": [
+        {
+          "name": "notification_id",
+          "type": "UUID"
+        },
+        {
+          "default": "Depends(get_current_user)",
+          "dependency": "get_current_user",
+          "name": "current_user",
+          "type": "Users"
+        }
+      ],
+      "path": "/notifications/{notification_id}/read"
+    }
+  ],
+  "contract_schema_changes": {
+    "Appointments_update": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "AptDateTime": {
+          "required": true,
+          "type": "str"
+        },
+        "AptStatus": {
+          "required": true,
+          "type": "str"
+        },
+        "Note": {
+          "default": null,
+          "required": false,
+          "type": "Optional[str]"
+        },
+        "Op": {
+          "required": true,
+          "type": "str"
+        },
+        "Pattern": {
+          "required": true,
+          "type": "str"
+        }
+      }
+    }
+  },
+  "contract_schemas": {
+    "notification_out": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "clinic_id": {
+          "required": true,
+          "type": "UUID"
+        },
+        "clinic_name": {
+          "required": true,
+          "type": "str"
+        },
+        "created_at": {
+          "required": true,
+          "type": "datetime"
+        },
+        "id": {
+          "required": true,
+          "type": "UUID"
+        },
+        "message": {
+          "required": true,
+          "type": "str"
+        },
+        "problem": {
+          "required": true,
+          "type": "str"
+        },
+        "read_at": {
+          "default": null,
+          "required": false,
+          "type": "Optional[datetime]"
+        },
+        "resolved_at": {
+          "default": null,
+          "required": false,
+          "type": "Optional[datetime]"
+        }
+      }
+    },
+    "notification_page_out": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "items": {
+          "required": true,
+          "type": "List[notification_out]"
+        },
+        "unread": {
+          "required": true,
+          "type": "int"
+        }
+      }
+    },
+    "notifications_read_out": {
+      "bases": [
+        "BaseModel"
+      ],
+      "fields": {
+        "updated": {
+          "required": true,
+          "type": "int"
+        }
+      }
+    }
+  },
+  "openapi_paths": {
+    "/notifications": {
+      "get": {
+        "operationId": "get_my_notifications_notifications_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "unread_only",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Unread Only",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/notification_page_out"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get My Notifications",
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/notifications/read-all": {
+      "post": {
+        "operationId": "read_all_my_notifications_notifications_read_all_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/notifications_read_out"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Read All My Notifications",
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/notifications/{notification_id}/read": {
+      "post": {
+        "operationId": "read_my_notification_notifications__notification_id__read_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notification_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notification Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/notification_out"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Read My Notification",
+        "tags": [
+          "Notifications"
+        ]
+      }
+    }
+  },
+  "openapi_schemas": {
+    "notification_out": {
+      "description": "A sync alert as one team member sees it. message says what to fix; resolved_at is\nset once the problem is gone (the waiting CRM changes then went through).",
+      "properties": {
+        "clinic_id": {
+          "format": "uuid",
+          "title": "Clinic Id",
+          "type": "string"
+        },
+        "clinic_name": {
+          "title": "Clinic Name",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "problem": {
+          "title": "Problem",
+          "type": "string"
+        },
+        "read_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Read At"
+        },
+        "resolved_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Resolved At"
+        }
+      },
+      "required": [
+        "id",
+        "clinic_id",
+        "clinic_name",
+        "problem",
+        "message",
+        "created_at"
+      ],
+      "title": "notification_out",
+      "type": "object"
+    },
+    "notification_page_out": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/components/schemas/notification_out"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "unread": {
+          "title": "Unread",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "items",
+        "unread"
+      ],
+      "title": "notification_page_out",
+      "type": "object"
+    },
+    "notifications_read_out": {
+      "properties": {
+        "updated": {
+          "title": "Updated",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "updated"
+      ],
+      "title": "notifications_read_out",
+      "type": "object"
+    }
+  }
+}

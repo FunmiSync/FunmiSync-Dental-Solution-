@@ -27,6 +27,14 @@ class Settings(BaseSettings):
     toroforge_admin: str = Field(...)
     toroforge_adminpwd: str = Field(...)
     cors_origins: list[str] = ['https://www.fumisync.com']
+    # Clinic alert emails, through any provider's SMTP server (Resend, SendGrid, Gmail...).
+    # Leave SMTP_HOST unset and no email is sent; in-app notifications still are.
+    smtp_host: str | None = Field(default=None)
+    smtp_port: int = Field(default=587)  # 587 STARTTLS, 465 TLS
+    smtp_username: str | None = Field(default=None)
+    smtp_password: str | None = Field(default=None)
+    alert_email_from: str | None = Field(default=None)
+    frontend_base_url: str = Field(default="https://www.fumisync.com")  # linked from alert emails
     @field_validator("cors_origins")
     @classmethod
     def trusted_origins(cls, origins):

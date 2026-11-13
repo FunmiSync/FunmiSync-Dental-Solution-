@@ -12,7 +12,7 @@ from sqlalchemy import select
 
 from local_database import close_local_session, local_session
 from app.models.entities import (
-    Audit_logs, ExternalOperation, LedgerStatus, Patients, PaymentProvider, PaymentTransaction, PaymentTransactionStatus,
+    Appointments, Audit_logs, ExternalOperation, LedgerStatus, Patients, PaymentProvider, PaymentTransaction, PaymentTransactionStatus,
     RegisteredClinics, Wallet, WalletLedgerEntry, WalletStatus, WalletTransfer, WalletTransferStatus, WalletType,
 )
 from app.schemas.api import AppointmentRequest
@@ -221,6 +221,106 @@ class AppointmentResolutionTests(AppointmentTestCase):
         item = await self.stuck_appointment()
         with self.assertRaisesRegex(InvalidRequest, "whole numbers"):
             await reconciliation.resolve(self.db, item.id, happened=True, resolved_by="Funmi", fields={"AptNum": "abc"})
+
+
+class BookingTestCase(AppointmentTestCase):
+    """The whole booking path (book): two chairs, a fake OpenDental, caches switched off."""
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        self.clinic.operatory_calendar_map = {"Scheduled": [{"calendar_id": "calendar", "operatories": [1, 2]}]}
+        await self.db.commit()
+        self.in_opendental = {1: [], 2: []}  # what each chair holds on 2026-10-17
+        self.provider.get_appointments_in_operatory = AsyncMock(side_effect=lambda op, start, end: self.in_opendental[op])
+        self.provider.update_appointment = AsyncMock(return_value={})
+        self.booking_caches = [patch(f"app.services.appointment_service.{name}", AsyncMock(return_value=None))
+                               for name in ("get_operatory_day_appointments_cached",
+                                            "set_operatory_day_appointments_cached", "invalidate_operatory_day_cache")]
+        for cache in self.booking_caches:
+            cache.start()
+
+    async def asyncTearDown(self):
+        for cache in self.booking_caches:
+            cache.stop()
+        await super().asyncTearDown()
+
+    async def appointment_row(self):
+        return await self.db.scalar(select(Appointments).filter_by(clinic_id=self.clinic.id, event_id="event"))
+
+
+class BookingAfterResolutionTests(BookingTestCase):
+    """Once a timed-out create is settled, the next attempt must not book again."""
+
+    async def booked_at_nine_in_chair_one(self):
+        """The first attempt timed out, but OpenDental did create appointment 42; someone confirmed it."""
+        with self.assertRaises(OpenDentalSyncError):
+            await self.service.book(self.req)
+        [item] = await reconciliation.list_unknown_outcomes(self.db)
+        await reconciliation.resolve(self.db, item.id, happened=True, resolved_by="Funmi", fields={"AptNum": "42"})
+        self.in_opendental[1] = [{"AptNum": 42, "PatNum": 12, "AptDateTime": "2026-10-17 09:00:00", "Pattern": "XXXXXX"}]
+
+    async def test_the_retry_reuses_the_confirmed_appointment_instead_of_booking_again(self):
+        await self.booked_at_nine_in_chair_one()
+        booking = await self.service.book(self.req)
+        self.assertEqual((booking.apt_num, booking.action), (42, "created"))
+        self.provider.create_appointments.assert_awaited_once()  # only the first, timed-out attempt
+        self.assertEqual((await self.appointment_row()).AptNum, 42)
+        self.assertEqual((await self.db.scalar(select(ExternalOperation))).state, "applied")
+
+    async def test_a_later_reschedule_moves_the_confirmed_appointment(self):
+        await self.booked_at_nine_in_chair_one()
+        moved = self.req.model_copy(update={"start_str": "10:00", "end_str": "10:30"})
+        booking = await self.service.book(moved)
+        self.assertEqual((booking.apt_num, booking.action), (42, "updated"))
+        self.provider.create_appointments.assert_awaited_once()
+        self.assertEqual(self.provider.update_appointment.await_args.kwargs["Aptnum"], 42)
+
+
+class NewerEventWinsTests(BookingTestCase):
+    """John books 09:00 (event A), then moves to 11:00 (event B). A's job is retried after B ran."""
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        self.provider.create_appointments = AsyncMock(return_value={"AptNum": 50})
+        self.a_arrived = datetime(2026, 10, 1, 9, 0, 0, tzinfo=timezone.utc)
+        self.b_arrived = self.a_arrived + timedelta(seconds=20)
+        self.event_a = self.req  # 09:00
+        self.event_b = self.req.model_copy(update={"start_str": "11:00", "end_str": "11:30"})
+
+    async def test_an_older_event_that_runs_late_changes_nothing(self):
+        await self.service.book(self.event_b, received_at=self.b_arrived)
+        self.provider.update_appointment.reset_mock()
+
+        late = await self.service.book(self.event_a, received_at=self.a_arrived)
+
+        self.assertEqual((late.apt_num, late.action), (50, "superseded"))
+        self.provider.update_appointment.assert_not_awaited()  # OpenDental keeps 11:00
+        row = await self.appointment_row()
+        self.assertEqual(row.start_time.strip(), "2026-10-17 11:00:00")
+        self.assertEqual(row.last_event_received_at.replace(tzinfo=timezone.utc), self.b_arrived)
+
+    async def test_events_in_arrival_order_end_with_the_newest(self):
+        await self.service.book(self.event_a, received_at=self.a_arrived)
+        moved = await self.service.book(self.event_b, received_at=self.b_arrived)
+        self.assertEqual((moved.apt_num, moved.action), (50, "updated"))
+        self.assertEqual((await self.appointment_row()).start_time.strip(), "2026-10-17 11:00:00")
+
+    async def test_a_late_event_still_sends_the_comm_log_the_appointment_never_had(self):
+        self.provider.create_commslog = AsyncMock(return_value={})
+        await self.service.book(self.event_b, received_at=self.b_arrived)  # B carried no comm log
+        with_note = self.event_a.model_copy(update={"commslog": "Patient confirmed by phone"})
+
+        late = await self.service.book(with_note, received_at=self.a_arrived)
+
+        self.assertEqual(late.action, "superseded")
+        self.provider.update_appointment.assert_not_awaited()  # the appointment itself is left alone
+        self.provider.create_commslog.assert_awaited_once()
+        self.assertTrue((await self.appointment_row()).commslog_done)
+
+    async def test_the_same_event_run_twice_is_not_superseded_by_itself(self):
+        await self.service.book(self.event_a, received_at=self.a_arrived)
+        again = await self.service.book(self.event_a, received_at=self.a_arrived)
+        self.assertEqual(again.action, "unchanged")
 
 
 class FundingTestCase(ReconciliationTestCase):

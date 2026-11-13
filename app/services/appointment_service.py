@@ -14,7 +14,8 @@ import logging
 import asyncio
 from typing import Any, Literal
 from app.infrastructure.circuit_breaker import CircuitBreakerOpenError
-from app.services.external_operations import ExternalOperations
+from app.services.external_operations import ExternalOperations, OutcomeNeedsPerson, OutcomeNotKnownYet, ReconciliationRequired, stored_request
+from app.services.reconciliation_checks import HAPPENED, NOT_DONE, WAITING, appointment_to_look_for, created_appointment_finding
 from app.security.encryption import hash_lookup
 from uuid import uuid5, NAMESPACE_URL
 from app.infrastructure.providers.payloads import check_time_slot, fmt, opendental_get_operatory_status, opendental_pattern_time_build
@@ -26,6 +27,30 @@ class CustomerConfigurationSyncError(Exception):
     pass
 
 
+class ClinicProblem(CustomerConfigurationSyncError):
+    """Something only the clinic can fix; sending the event again cannot help until they do.
+
+    code says what kind of problem it is, so alerts are grouped and explained; subject
+    narrows it (a calendar, a patient), and events sharing code and subject share one alert.
+    The message is shown to clinic staff and emailed, so it must never contain patient details.
+    """
+
+    def __init__(self, code: str, message: str, *, subject: str = ""):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.subject = subject
+
+
+# ClinicProblem codes
+OPENDENTAL_CREDENTIALS = "opendental_credentials"   # affects every event: the line pauses
+OPENDENTAL_UNREACHABLE = "opendental_unreachable"   # raised by the worker after an hour of outage
+CHAIR_MAPPING = "chair_mapping"
+NO_FREE_SLOT = "no_free_slot"
+PATIENT_MATCH = "patient_match"
+OPENDENTAL_REFUSED = "opendental_refused"
+
+
 class OpenDentalSyncError(Exception):
     pass
 
@@ -34,12 +59,40 @@ class InternalSyncError(Exception):
     pass
 
 
-BookingAction = Literal["created", "updated", "unchanged", "create", "update", "unchanged"]
+BookingAction = Literal["created", "updated", "unchanged", "create", "update", "superseded"]
 
 @dataclass
 class AppointmentBookingResult:
-    apt_num: int
+    apt_num: int | None  # None only when "superseded" reaches a row without an OpenDental number
     action: BookingAction
+
+
+def _as_utc(value: datetime) -> datetime:
+    # SQLite (tests) gives back naive datetimes; PostgreSQL gives aware ones.
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
+
+def _older_than_applied(reserve: Appointments | None, received_at: datetime | None) -> bool:
+    """True when a newer event has already been applied to this appointment."""
+    if reserve is None or received_at is None or reserve.last_event_received_at is None:
+        return False
+    return _as_utc(received_at) < _as_utc(reserve.last_event_received_at)
+
+
+def _note_to_send(reserve: Appointments | None, req: AppointmentRequest) -> str | None:
+    """The CRM's note when it differs from the one last written to OpenDental, else None.
+    OpenDental replaces the whole note with it. An empty note is never sent, so a workflow
+    that leaves the note out cannot wipe the note in OpenDental."""
+    note = (req.Note or "").strip()
+    if not note or reserve is None or reserve.note_hash == hash_lookup(note):
+        return None
+    return note
+
+
+def _record_applied_event(reserve: Appointments, received_at: datetime | None) -> None:
+    # The caller commits this with the appointment change itself, so the two never disagree.
+    if received_at is not None and not _older_than_applied(reserve, received_at):
+        reserve.last_event_received_at = received_at
 
 class AppointmentService():
     def __init__(self, db: AsyncSession, clinic: RegisteredClinics, od_client: openDentalApi) : 
@@ -75,7 +128,8 @@ class AppointmentService():
         except CircuitBreakerOpenError:
             raise
         except OpenDentalRequestError as exc:
-            raise CustomerConfigurationSyncError(str(exc)) from exc
+            raise ClinicProblem(OPENDENTAL_REFUSED, "OpenDental refused the request. Check the clinic's chair "
+                                "mapping and the appointment details in the CRM.") from exc
            
         except OpenDentalAuthError as exc:
             async with self._session_lock:
@@ -94,7 +148,8 @@ class AppointmentService():
                 "reason": str(exc),
             },
             )
-            raise CustomerConfigurationSyncError("Open dental credentials are invalid") from exc 
+            raise ClinicProblem(OPENDENTAL_CREDENTIALS, "OpenDental rejected the clinic's API keys. "
+                                "Update the OpenDental developer and customer keys.") from exc
         
         except (TimeoutError, ConnectionError) as exc:
             logger.warning(
@@ -178,7 +233,9 @@ class AppointmentService():
 
 
     async def book(self, req: AppointmentRequest, * , sync_log_service: AppointmentSyncLogService | None = None,
-        sync_log: AppointmentSyncLog | None = None,) -> AppointmentBookingResult | None:
+        sync_log: AppointmentSyncLog | None = None, received_at: datetime | None = None) -> AppointmentBookingResult | None:
+        """received_at: when our server got this event. Pass it so an older event never
+        overwrites a newer one; None skips that check."""
         if self.clinic.is_disabled:
             raise CustomerConfigurationSyncError("Clinic is disabled")
         start_dt, end_dt, pattern = self.build_time(req)
@@ -186,7 +243,18 @@ class AppointmentService():
         end_text = self._format_od_datetime(end_dt)
 
         reserve = await self.book_reserve(req, start_text=start_text, end_text=end_text)
-        existing_aptnum = reserve.AptNum if (reserve and reserve.AptNum ) else None 
+        if _older_than_applied(reserve, received_at):
+            # The appointment itself is left alone: OpenDental already shows a newer state.
+            # A comm log or pop-up is not state, so it still goes if this appointment never had one.
+            if reserve.AptNum:
+                await self.finish_side_effects(reserve, req)
+            return AppointmentBookingResult(apt_num=reserve.AptNum, action="superseded")
+        adopted = False
+        if reserve and not reserve.AptNum:
+            await self._settle_earlier_create(req)
+            adopted = await self._adopt_confirmed_create(req, reserve)
+        existing_aptnum = reserve.AptNum if (reserve and reserve.AptNum ) else None
+        note = _note_to_send(reserve, req)
 
         if reserve and existing_aptnum:
             change = bool(
@@ -198,12 +266,20 @@ class AppointmentService():
             )
 
             if not change:
+                if note is not None:
+                    # Only the note changed. Send just the note: no chair check, so a note
+                    # change is never refused because the chair has since filled up.
+                    await self._run_od_call(self.od.update_appointment_note(Aptnum=existing_aptnum, note=note),
+                                            operation="update_appointment_note")
+                    reserve.note_hash = hash_lookup(note)
                 if sync_log_service and sync_log:
-                    await sync_log_service.mark_operation(sync_log, operation="unchanged")
+                    await sync_log_service.mark_operation(sync_log, operation="unchanged" if note is None else "update")
+                _record_applied_event(reserve, received_at)
+                await self.db.commit()
                 await self.finish_side_effects(reserve, req)
                 return AppointmentBookingResult(
                     apt_num=int(existing_aptnum),
-                    action="unchanged",
+                    action="created" if adopted else ("unchanged" if note is None else "updated"),
                 )
             
         intended_operation: BookingAction = "update" if existing_aptnum else "create"
@@ -213,14 +289,15 @@ class AppointmentService():
         operatories = self.get_operatories(req)
 
         if not operatories:
-            logger.warning("No Operatories found for this Calendar ")
-            return None 
+            raise ClinicProblem(CHAIR_MAPPING, f"No chair is mapped to CRM calendar {req.calendar_id} for "
+                                f"'{req.status}' appointments. Add it to the clinic's chair mapping.",
+                                subject=f"{req.calendar_id}:{req.status}")
 
-        booking = await self.book_into_operatory( req, operatories = operatories , start_dt = start_dt , end_dt = end_dt, pattern = pattern, AptNum= existing_aptnum)
+        booking = await self.book_into_operatory( req, operatories = operatories , start_dt = start_dt , end_dt = end_dt, pattern = pattern, AptNum= existing_aptnum, note=note)
 
         if not booking:
-            logger.warning("No timeslot available for this Appointment in any operatory")
-            return None 
+            raise ClinicProblem(NO_FREE_SLOT, f"No mapped chair is free on {req.date_str} from {req.start_str} "
+                                f"to {req.end_str}. Free a chair in OpenDental or move the appointment in the CRM.")
         
         logger.info(f"Appointment is being booked for {booking.apt_num} in {operatories} for clinic {self.clinic.clinic_name}")
         if reserve:
@@ -230,6 +307,10 @@ class AppointmentService():
             reserve.start_time = start_text   # type: ignore
             reserve.end_time = end_text    # type: ignore
             reserve.calendar_id = req.calendar_id
+            _record_applied_event(reserve, received_at)
+            sent_note = (req.Note or "").strip() if booking.action == "created" else note
+            if sent_note:
+                reserve.note_hash = hash_lookup(sent_note)
             if booking.action == "created":
                 await self.operations.mark_applied(self.operation_key(req, "appointment_create"))
             await self.db.commit()
@@ -238,18 +319,74 @@ class AppointmentService():
             await self.finish_side_effects(reserve, req)
         return booking
 
+    async def _settle_earlier_create(self, req: AppointmentRequest) -> None:
+        """If an earlier attempt to create this appointment timed out, ask OpenDental's own
+        records what it did before doing anything else: creating again could double-book.
+
+        Found: recorded as created, and the caller reuses its number. Missing after
+        OPENDENTAL_NOT_DONE_AFTER: recorded as not done, so it is created afresh. Otherwise
+        raises OutcomeNotKnownYet (look again shortly) or OutcomeNeedsPerson.
+        """
+        operation = await self.operations.get(self.operation_key(req, "appointment_create"))
+        if not self.operations.unknown(operation):
+            return
+        request = stored_request(operation)
+        lookup = appointment_to_look_for(request)
+        if lookup is None:
+            raise OutcomeNeedsPerson("An earlier booking attempt timed out before its details were kept")
+        chair, day = lookup
+        appointments = await self._run_od_call(self.od.get_appointments_in_operatory(chair, day, day),
+                                               operation="check_earlier_booking")
+        age = self._utcnow() - _as_utc(operation.created_at)
+        finding = created_appointment_finding(appointments or [], request, age)
+        if finding.outcome == HAPPENED:
+            await self.operations.settle_from_provider_read(
+                operation, result={"AptNum": int(finding.fields["AptNum"])}, evidence=finding.evidence)
+        elif finding.outcome == NOT_DONE:
+            await self.operations.settle_from_provider_read(operation, result=None, evidence=finding.evidence)
+        elif finding.outcome == WAITING:
+            raise OutcomeNotKnownYet(f"An earlier booking attempt timed out. {finding.evidence}")
+        else:
+            raise OutcomeNeedsPerson(finding.evidence)
+
+    async def _adopt_confirmed_create(self, req: AppointmentRequest, reserve: Appointments) -> bool:
+        # An earlier attempt created this appointment in OpenDental, and the journal knows
+        # its number (from OpenDental's answer, a person, or the automatic check), but the
+        # row never got it. Without this the next attempt books again: our own appointment
+        # now fills the slot, so it picks another chair and the journal refuses the request.
+        key = self.operation_key(req, "appointment_create")
+        result = await self.operations.confirmed_result(key)
+        if not result or not result.get("AptNum"):
+            return False
+        reserve.AptNum = int(result["AptNum"])
+        await self.operations.mark_applied(key)
+        await self.db.commit()
+        return True
+
     async def finish_side_effects(self, reserve: Appointments, req: AppointmentRequest) -> None:
         if reserve and not reserve.commslog_done and req.commslog:   # type: ignore
-            await self.handle_commslog(req)
-            reserve.commslog_done = True
-            await self.operations.mark_applied(self.operation_key(req, "commslog"))
-            await self.db.commit()
+            if await self._side_effect_sent(self.handle_commslog, req, "commslog"):
+                reserve.commslog_done = True
+                await self.operations.mark_applied(self.operation_key(req, "commslog"))
+                await self.db.commit()
 
         if  reserve and not reserve.popups_done and req.pop_up:   # type: ignore
-            await self.handle_popups(req)
-            reserve.popups_done = True
-            await self.operations.mark_applied(self.operation_key(req, "popup"))
-            await self.db.commit()
+            if await self._side_effect_sent(self.handle_popups, req, "popup"):
+                reserve.popups_done = True
+                await self.operations.mark_applied(self.operation_key(req, "popup"))
+                await self.db.commit()
+
+    async def _side_effect_sent(self, send, req: AppointmentRequest, action: str) -> bool:
+        try:
+            await send(req)
+            return True
+        except ReconciliationRequired:
+            # An earlier attempt to add this note timed out; adding it again could duplicate
+            # it. It is listed in tools.stuck_operations for a person. The appointment itself
+            # is already right, so the event carries on rather than waiting on a note.
+            logger.warning("Skipped an OpenDental %s whose earlier attempt has an unknown outcome", action,
+                           extra={"clinic_id": str(self.clinic.id)})
+            return False
 
 
     async def book_into_operatory(
@@ -260,6 +397,7 @@ class AppointmentService():
         end_dt: datetime,
         pattern: str,
         AptNum: int | None,
+        note: str | None = None,
     ) -> AppointmentBookingResult | None:
         #Create date pattern for date time start and date time end
         date_start = start_dt.strftime("%Y-%m-%d")
@@ -289,7 +427,8 @@ class AppointmentService():
                     req = req ,
                     op = op,  
                     start_dt = start_dt,
-                    AptNum= AptNum
+                    AptNum= AptNum,
+                    note = note,
                     )
                 
                 await invalidate_operatory_day_cache(
@@ -400,18 +539,21 @@ class AppointmentService():
         AptNum: int,
         op: int,
         start_dt: datetime,
+        note: str | None = None,
     ) -> dict[str, Any]:
         appointment = Appointments_update(
             Pattern= pattern,
             AptDateTime=self._format_od_datetime(start_dt),
             Op = str(op),
-            AptStatus= req.status
+            AptStatus= req.status,
+            Note = note,  # None: leave OpenDental's note as it is
         )
 
         return await self._run_od_call(
         self.od.update_appointment(Aptnum=AptNum, appointment_data=appointment),
         operation="update_appointment",
         )
+
     
     async def handle_commslog(self, req : AppointmentRequest):
         if not req.commslog:
